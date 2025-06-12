@@ -246,6 +246,14 @@ class ApiService {
   }
 
   // Organizers
+  async getOrganizers(): Promise<Organizer[]> {
+    const response = await this.fetchWithAuth<Organizer[]>(
+      "organizers",
+      "/organizers"
+    );
+    return response.data || [];
+  }
+
   async getOrganizerProfile(): Promise<ApiResponse<Organizer>> {
     return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile");
   }
