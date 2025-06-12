@@ -1,5 +1,6 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api";
+import { createClient } from "@/utils/supabase/client";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 export interface Event {
   id: string;
@@ -66,6 +67,43 @@ export interface Organizer {
   events_count?: number;
 }
 
+export interface Booking {
+  id: string;
+  user_id: string;
+  event_id: string;
+  total_price: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  status: "pending" | "confirmed" | "cancelled";
+  payment_intent_id?: string;
+  created_at: string;
+  updated_at: string;
+  events: {
+    title: string;
+    start_date: string;
+    start_time: string;
+    location_name: string;
+    location_address?: string;
+  };
+  booking_items: Array<{
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    ticket_types: {
+      name: string;
+      description?: string;
+    };
+  }>;
+  tickets: Array<{
+    id: string;
+    ticket_code: string;
+    qr_code: string;
+    status: string;
+    scanned_at?: string;
+  }>;
+}
+
 export interface EventSearchParams {
   query?: string;
   category?: string;
@@ -85,6 +123,9 @@ export interface ApiResponse<T> {
   data?: T;
   events?: Event[];
   categories?: Category[];
+  bookings?: Booking[];
+  booking?: Booking;
+  organizer?: Organizer;
   pagination?: {
     page: number;
     limit: number;
@@ -95,21 +136,42 @@ export interface ApiResponse<T> {
 }
 
 class ApiService {
-  private async fetch<T>(
-    endpoint: string,
+  private supabase = createClient();
+
+  private async fetchWithAuth<T>(
+    functionName: string,
+    path: string,
     options?: RequestInit
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...options?.headers,
-        },
-        ...options,
-      });
+      // Get current session for authentication
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...((options?.headers as Record<string, string>) || {}),
+      };
+
+      // Add authorization header if session exists
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/${functionName}${path}`,
+        {
+          ...options,
+          headers,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
       }
 
       const data = await response.json();
@@ -135,40 +197,114 @@ class ApiService {
     }
 
     const queryString = searchParams.toString();
-    const endpoint = `/events${queryString ? `?${queryString}` : ""}`;
+    const path = `/events${queryString ? `?${queryString}` : ""}`;
 
-    return this.fetch<Event[]>(endpoint);
+    return this.fetchWithAuth<Event[]>("events", path);
   }
 
   async getFeaturedEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetch<Event[]>("/events/featured");
+    return this.fetchWithAuth<Event[]>("events", "/events/featured");
   }
 
   async getEvent(identifier: string): Promise<ApiResponse<Event>> {
-    const response = await this.fetch<any>(`/events/${identifier}`);
+    const response = await this.fetchWithAuth<any>(
+      "events",
+      `/events/${identifier}`
+    );
     if ((response as any).event) {
       return { data: (response as any).event };
     }
     return response;
   }
 
+  async createEvent(eventData: Partial<Event>): Promise<ApiResponse<Event>> {
+    return this.fetchWithAuth<Event>("events", "/events", {
+      method: "POST",
+      body: JSON.stringify(eventData),
+    });
+  }
+
+  async updateEvent(
+    id: string,
+    eventData: Partial<Event>
+  ): Promise<ApiResponse<Event>> {
+    return this.fetchWithAuth<Event>("events", `/events/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(eventData),
+    });
+  }
+
+  async deleteEvent(id: string): Promise<ApiResponse<void>> {
+    return this.fetchWithAuth<void>("events", `/events/${id}`, {
+      method: "DELETE",
+    });
+  }
+
   // Categories
   async getCategories(): Promise<ApiResponse<Category[]>> {
-    return this.fetch<Category[]>("/categories");
+    return this.fetchWithAuth<Category[]>("categories", "/categories");
   }
 
   // Organizers
-  async getOrganizers(): Promise<Organizer[]> {
-    const response = await this.fetch<any>("/organizers");
-    return (response as any).organizers || [];
+  async getOrganizerProfile(): Promise<ApiResponse<Organizer>> {
+    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile");
   }
 
-  async getOrganizer(id: string): Promise<ApiResponse<Organizer>> {
-    const response = await this.fetch<any>(`/organizers/${id}`);
-    if ((response as any).organizer) {
-      return { data: (response as any).organizer };
-    }
-    return response;
+  async createOrganizerProfile(
+    organizerData: Partial<Organizer>
+  ): Promise<ApiResponse<Organizer>> {
+    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile", {
+      method: "POST",
+      body: JSON.stringify(organizerData),
+    });
+  }
+
+  async updateOrganizerProfile(
+    organizerData: Partial<Organizer>
+  ): Promise<ApiResponse<Organizer>> {
+    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile", {
+      method: "PUT",
+      body: JSON.stringify(organizerData),
+    });
+  }
+
+  async getOrganizerEvents(): Promise<ApiResponse<Event[]>> {
+    return this.fetchWithAuth<Event[]>("organizers", "/organizers/events");
+  }
+
+  // Bookings
+  async getBookings(): Promise<ApiResponse<Booking[]>> {
+    return this.fetchWithAuth<Booking[]>("bookings", "/bookings");
+  }
+
+  async getBooking(id: string): Promise<ApiResponse<Booking>> {
+    return this.fetchWithAuth<Booking>("bookings", `/bookings/${id}`);
+  }
+
+  async createBooking(bookingData: {
+    event_id: string;
+    items: Array<{
+      ticket_type_id: string;
+      quantity: number;
+    }>;
+    customer_name: string;
+    customer_email: string;
+    customer_phone?: string;
+  }): Promise<ApiResponse<{ booking: Booking; checkout_url: string }>> {
+    return this.fetchWithAuth<{ booking: Booking; checkout_url: string }>(
+      "bookings",
+      "/bookings",
+      {
+        method: "POST",
+        body: JSON.stringify(bookingData),
+      }
+    );
+  }
+
+  async cancelBooking(id: string): Promise<ApiResponse<Booking>> {
+    return this.fetchWithAuth<Booking>("bookings", `/bookings/${id}/cancel`, {
+      method: "POST",
+    });
   }
 
   // Search events with advanced filtering

@@ -22,14 +22,7 @@ const nextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:3002/api/:path*",
-      },
-    ];
-  },
+  // Removed API rewrites since we're now using Supabase Edge Functions directly
 };
 
 module.exports = nextConfig;
