@@ -197,20 +197,17 @@ class ApiService {
     }
 
     const queryString = searchParams.toString();
-    const path = `/events${queryString ? `?${queryString}` : ""}`;
+    const path = `${queryString ? `?${queryString}` : ""}`;
 
     return this.fetchWithAuth<Event[]>("events", path);
   }
 
   async getFeaturedEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetchWithAuth<Event[]>("events", "/events/featured");
+    return this.fetchWithAuth<Event[]>("events", "/featured");
   }
 
   async getEvent(identifier: string): Promise<ApiResponse<Event>> {
-    const response = await this.fetchWithAuth<any>(
-      "events",
-      `/events/${identifier}`
-    );
+    const response = await this.fetchWithAuth<any>("events", `/${identifier}`);
     if ((response as any).event) {
       return { data: (response as any).event };
     }
@@ -218,7 +215,7 @@ class ApiService {
   }
 
   async createEvent(eventData: Partial<Event>): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", "/events", {
+    return this.fetchWithAuth<Event>("events", "", {
       method: "POST",
       body: JSON.stringify(eventData),
     });
@@ -228,40 +225,37 @@ class ApiService {
     id: string,
     eventData: Partial<Event>
   ): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", `/events/${id}`, {
+    return this.fetchWithAuth<Event>("events", `/${id}`, {
       method: "PUT",
       body: JSON.stringify(eventData),
     });
   }
 
   async deleteEvent(id: string): Promise<ApiResponse<void>> {
-    return this.fetchWithAuth<void>("events", `/events/${id}`, {
+    return this.fetchWithAuth<void>("events", `/${id}`, {
       method: "DELETE",
     });
   }
 
   // Categories
   async getCategories(): Promise<ApiResponse<Category[]>> {
-    return this.fetchWithAuth<Category[]>("categories", "/categories");
+    return this.fetchWithAuth<Category[]>("categories", "");
   }
 
   // Organizers
   async getOrganizers(): Promise<Organizer[]> {
-    const response = await this.fetchWithAuth<Organizer[]>(
-      "organizers",
-      "/organizers"
-    );
+    const response = await this.fetchWithAuth<Organizer[]>("organizers", "");
     return response.data || [];
   }
 
   async getOrganizerProfile(): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile");
+    return this.fetchWithAuth<Organizer>("organizers", "/profile");
   }
 
   async createOrganizerProfile(
     organizerData: Partial<Organizer>
   ): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile", {
+    return this.fetchWithAuth<Organizer>("organizers", "/profile", {
       method: "POST",
       body: JSON.stringify(organizerData),
     });
@@ -270,23 +264,23 @@ class ApiService {
   async updateOrganizerProfile(
     organizerData: Partial<Organizer>
   ): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/organizers/profile", {
+    return this.fetchWithAuth<Organizer>("organizers", "/profile", {
       method: "PUT",
       body: JSON.stringify(organizerData),
     });
   }
 
   async getOrganizerEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetchWithAuth<Event[]>("organizers", "/organizers/events");
+    return this.fetchWithAuth<Event[]>("organizers", "/events");
   }
 
   // Bookings
   async getBookings(): Promise<ApiResponse<Booking[]>> {
-    return this.fetchWithAuth<Booking[]>("bookings", "/bookings");
+    return this.fetchWithAuth<Booking[]>("bookings", "");
   }
 
   async getBooking(id: string): Promise<ApiResponse<Booking>> {
-    return this.fetchWithAuth<Booking>("bookings", `/bookings/${id}`);
+    return this.fetchWithAuth<Booking>("bookings", `/${id}`);
   }
 
   async createBooking(bookingData: {
@@ -301,7 +295,7 @@ class ApiService {
   }): Promise<ApiResponse<{ booking: Booking; checkout_url: string }>> {
     return this.fetchWithAuth<{ booking: Booking; checkout_url: string }>(
       "bookings",
-      "/bookings",
+      "",
       {
         method: "POST",
         body: JSON.stringify(bookingData),
@@ -310,7 +304,7 @@ class ApiService {
   }
 
   async cancelBooking(id: string): Promise<ApiResponse<Booking>> {
-    return this.fetchWithAuth<Booking>("bookings", `/bookings/${id}/cancel`, {
+    return this.fetchWithAuth<Booking>("bookings", `/${id}/cancel`, {
       method: "POST",
     });
   }
