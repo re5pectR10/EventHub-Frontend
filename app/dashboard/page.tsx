@@ -1,0 +1,270 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { apiService } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { CalendarIcon, UsersIcon, TicketIcon, PlusIcon } from "lucide-react";
+import { DashboardNav } from "@/components/layout/dashboard-nav";
+
+interface DashboardStats {
+  eventsCount: number;
+  totalBookings: number;
+  totalRevenue: number;
+  upcomingEvents: any[];
+  recentBookings: any[];
+}
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
+  const router = useRouter();
+
+  useEffect(() => {
+    async function getUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/auth/signin");
+        return;
+      }
+      setUser(user);
+      await fetchDashboardData(user);
+    }
+    getUser();
+  }, []);
+
+  async function fetchDashboardData(user: any) {
+    try {
+      // Fetch organizer's events using API service
+      const eventsResponse = await apiService.getOrganizerEvents();
+
+      // Fetch bookings for organizer's events using API service
+      const bookingsResponse = await apiService.getBookings();
+
+      if (eventsResponse.error || bookingsResponse.error) {
+        setError(
+          eventsResponse.error ||
+            bookingsResponse.error ||
+            "Failed to load dashboard data"
+        );
+        return;
+      }
+
+      const events = eventsResponse.events || [];
+      const bookings = bookingsResponse.bookings || [];
+
+      // Calculate stats
+      const upcomingEvents = events.filter(
+        (event: any) => new Date(event.start_date) > new Date()
+      );
+      const totalRevenue = bookings.reduce(
+        (sum: number, booking: any) => sum + booking.total_price,
+        0
+      );
+
+      setStats({
+        eventsCount: events.length,
+        totalBookings: bookings.length,
+        totalRevenue,
+        upcomingEvents: upcomingEvents.slice(0, 5),
+        recentBookings: bookings.slice(0, 5),
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load dashboard data. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+          <p className="mt-4">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-2 text-gray-600">
+            Welcome back! Here's what's happening with your events.
+          </p>
+        </div>
+
+        {/* Dashboard Navigation */}
+        <DashboardNav />
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <div className="flex flex-wrap gap-4">
+            <Link href="/dashboard/events/create">
+              <Button className="flex items-center gap-2">
+                <PlusIcon className="h-4 w-4" />
+                Create Event
+              </Button>
+            </Link>
+            <Link href="/dashboard/events">
+              <Button variant="outline">Manage Events</Button>
+            </Link>
+            <Link href="/dashboard/bookings">
+              <Button variant="outline">View Bookings</Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Events
+              </CardTitle>
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats?.eventsCount || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {stats?.upcomingEvents?.length || 0} upcoming
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Bookings
+              </CardTitle>
+              <TicketIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats?.totalBookings || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">Across all events</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Revenue
+              </CardTitle>
+              <UsersIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ${(stats?.totalRevenue || 0).toFixed(2)}
+              </div>
+              <p className="text-xs text-muted-foreground">All time</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Upcoming Events */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Upcoming Events</CardTitle>
+              <CardDescription>Your next 5 events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats?.upcomingEvents?.length ? (
+                <div className="space-y-4">
+                  {stats.upcomingEvents.map((event: any) => (
+                    <div
+                      key={event.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div>
+                        <h4 className="font-medium">{event.title}</h4>
+                        <p className="text-sm text-gray-500">
+                          {new Date(event.start_date).toLocaleDateString()} at{" "}
+                          {event.start_time}
+                        </p>
+                      </div>
+                      <Link href={`/dashboard/events/${event.id}`}>
+                        <Button variant="outline" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No upcoming events</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Bookings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Bookings</CardTitle>
+              <CardDescription>Latest bookings for your events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats?.recentBookings?.length ? (
+                <div className="space-y-4">
+                  {stats.recentBookings.map((booking: any) => (
+                    <div
+                      key={booking.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div>
+                        <h4 className="font-medium">{booking.customer_name}</h4>
+                        <p className="text-sm text-gray-500">
+                          ${booking.total_price.toFixed(2)} - {booking.status}
+                        </p>
+                      </div>
+                      <Link href={`/dashboard/bookings/${booking.id}`}>
+                        <Button variant="outline" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No recent bookings</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

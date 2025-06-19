@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Search, MapPin, Calendar } from "lucide-react";
+import Link from "next/link";
 
 export function Hero() {
   return (
@@ -49,7 +50,7 @@ export function Hero() {
           </div>
 
           {/* Clean Stats - Simplified */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 max-w-3xl mx-auto mb-16">
             <div className="text-center">
               <div className="text-4xl font-bold text-primary mb-2">500+</div>
               <div className="text-muted-foreground">Events This Month</div>
@@ -61,6 +62,28 @@ export function Hero() {
             <div className="text-center">
               <div className="text-4xl font-bold text-primary mb-2">10K+</div>
               <div className="text-muted-foreground">Happy Attendees</div>
+            </div>
+          </div>
+
+          {/* Organizer CTA */}
+          <div className="card-clean bg-primary/5 border-primary/20">
+            <div className="text-center">
+              <h3 className="text-2xl font-bold text-foreground mb-4">
+                Are you an event organizer?
+              </h3>
+              <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+                Join our platform and start creating amazing events. Manage
+                bookings, track sales, and connect with your audience all in one
+                place.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button asChild className="btn-clean btn-primary">
+                  <Link href="/dashboard">Get Started</Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/organizers">View Organizers</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

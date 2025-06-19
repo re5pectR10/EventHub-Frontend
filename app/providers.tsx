@@ -2,6 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { NotificationProvider } from "@/components/ui/notification-provider";
+import { Header } from "@/components/layout/header";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -24,6 +26,10 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <Header />
+      {children}
+      <NotificationProvider />
+    </QueryClientProvider>
   );
 }

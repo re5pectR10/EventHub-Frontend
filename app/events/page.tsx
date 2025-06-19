@@ -3,18 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search, Filter, SlidersHorizontal, Grid, List } from "lucide-react";
-import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { EventCard } from "@/components/events/event-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  apiService,
-  type Event,
-  type Category,
-  type EventSearchParams,
-} from "@/lib/api";
+import { apiService } from "@/lib/api";
+import Link from "next/link";
+import type { Event, Category, EventSearchParams } from "@/lib/types";
 
 interface FilterState {
   query: string;
@@ -153,8 +149,6 @@ export default function EventsPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
-
       <main className="flex-1">
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12">
@@ -401,6 +395,29 @@ export default function EventsPage() {
               )}
             </>
           )}
+        </section>
+
+        {/* Organizer CTA Section */}
+        <section className="bg-primary/5 py-16">
+          <div className="container-clean">
+            <div className="max-w-4xl mx-auto text-center">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                Ready to host your own event?
+              </h2>
+              <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+                Join thousands of organizers who trust our platform to manage
+                their events, sell tickets, and connect with their audience.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button asChild size="lg" className="btn-clean btn-primary">
+                  <Link href="/dashboard">Start Creating Events</Link>
+                </Button>
+                <Button variant="outline" size="lg" asChild>
+                  <Link href="/organizers">Browse Organizers</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
 

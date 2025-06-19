@@ -1,700 +1,459 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  Users,
-  CreditCard,
-  Shield,
-  ArrowLeft,
-  Minus,
-  Plus,
-  Check,
-} from "lucide-react";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormField, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { Minus, Plus, Calendar, MapPin, Clock, CreditCard } from "lucide-react";
 import { apiService } from "@/lib/api";
-import { createClient } from "@/utils/supabase/client";
-import { edgeFunctionsService } from "@/lib/edge-functions";
-import type { Event } from "@/lib/api";
-
-interface TicketSelection {
-  ticketTypeId: string;
-  quantity: number;
-  price: number;
-  name: string;
-}
-
-interface BookingFormData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  specialRequests?: string;
-}
-
-interface FormErrors {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  specialRequests?: string;
-  general?: string;
-}
+import type { Event, TicketType, TicketSelection } from "@/lib/types";
 
 export default function BookEventPage() {
   const params = useParams();
   const router = useRouter();
-  const supabase = createClient();
+  const slug = params.slug as string;
 
   const [event, setEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
   const [ticketSelections, setTicketSelections] = useState<TicketSelection[]>(
     []
   );
-  const [formData, setFormData] = useState<BookingFormData>({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    specialRequests: "",
-  });
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [bookingComplete, setBookingComplete] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchEvent = async () => {
+    async function loadEvent() {
       try {
-        setLoading(true);
-        const response = await apiService.getEvent(params.slug as string);
-        if (response.data) {
-          setEvent(response.data);
+        const response = await apiService.getEventBySlug(slug);
+
+        if (response.error) {
+          setError(response.error);
+          return;
+        }
+
+        const eventData = response.data || response.event;
+        if (eventData) {
+          // Event data already includes ticket types from the API
+          setEvent({
+            ...eventData,
+            ticket_types: eventData.ticket_types || [],
+          });
         }
       } catch (error) {
-        console.error("Failed to fetch event:", error);
+        console.error("Error loading event:", error);
+        setError("Failed to load event details");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) {
-        setFormData((prev) => ({
-          ...prev,
-          firstName: user.user_metadata?.first_name || "",
-          lastName: user.user_metadata?.last_name || "",
-          email: user.email || "",
-        }));
-      }
-    };
-
-    fetchEvent();
-    getUser();
-  }, [params.slug, supabase.auth]);
+    if (slug) {
+      loadEvent();
+    }
+  }, [slug]);
 
   const updateTicketQuantity = (ticketTypeId: string, quantity: number) => {
-    const ticketType = event?.ticket_types.find((t) => t.id === ticketTypeId);
-    if (!ticketType) return;
-
     setTicketSelections((prev) => {
-      const existing = prev.find((t) => t.ticketTypeId === ticketTypeId);
-      if (quantity === 0) {
-        return prev.filter((t) => t.ticketTypeId !== ticketTypeId);
-      }
+      const existing = prev.find((ts) => ts.ticket_type_id === ticketTypeId);
 
-      const newSelection: TicketSelection = {
-        ticketTypeId,
-        quantity,
-        price: ticketType.price,
-        name: ticketType.name,
-      };
+      if (quantity === 0) {
+        return prev.filter((ts) => ts.ticket_type_id !== ticketTypeId);
+      }
 
       if (existing) {
-        return prev.map((t) =>
-          t.ticketTypeId === ticketTypeId ? newSelection : t
+        return prev.map((ts) =>
+          ts.ticket_type_id === ticketTypeId ? { ...ts, quantity } : ts
         );
-      } else {
-        return [...prev, newSelection];
       }
+
+      return [...prev, { ticket_type_id: ticketTypeId, quantity }];
     });
   };
 
   const getTicketQuantity = (ticketTypeId: string): number => {
-    return (
-      ticketSelections.find((t) => t.ticketTypeId === ticketTypeId)?.quantity ||
-      0
+    const selection = ticketSelections.find(
+      (ts) => ts.ticket_type_id === ticketTypeId
     );
+    return selection?.quantity || 0;
   };
 
   const getTotalPrice = (): number => {
-    return ticketSelections.reduce(
-      (total, ticket) => total + ticket.price * ticket.quantity,
-      0
-    );
+    if (!event) return 0;
+
+    return ticketSelections.reduce((total, selection) => {
+      const ticketType = event.ticket_types.find(
+        (tt) => tt.id === selection.ticket_type_id
+      );
+      return total + (ticketType?.price || 0) * selection.quantity;
+    }, 0);
   };
 
   const getTotalTickets = (): number => {
     return ticketSelections.reduce(
-      (total, ticket) => total + ticket.quantity,
+      (total, selection) => total + selection.quantity,
       0
     );
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = "First name is required";
-    }
-
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = "Last name is required";
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-
-    if (!formData.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    }
-
-    if (ticketSelections.length === 0) {
-      newErrors.general = "Please select at least one ticket";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
+  const handleCheckout = async () => {
+    if (!event || ticketSelections.length === 0) {
+      setError("Please select at least one ticket");
       return;
     }
 
-    if (!user) {
-      router.push(
-        `/auth/signin?redirect=${encodeURIComponent(window.location.pathname)}`
-      );
+    if (!customerEmail) {
+      setError("Please enter your email address");
       return;
     }
 
-    setSubmitting(true);
-    setErrors({});
+    if (!customerName) {
+      setError("Please enter your name");
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
 
     try {
-      // Prepare booking data for Edge Function
-      const bookingData = {
-        eventId: event?.id || "",
-        tickets: ticketSelections.map((selection) => ({
-          type: selection.name,
-          quantity: selection.quantity,
-          price: selection.price,
-        })),
-        attendees: [
-          {
-            name: `${formData.firstName} ${formData.lastName}`,
-            email: formData.email,
-            phone: formData.phone,
-          },
-        ],
-        specialRequests: formData.specialRequests,
-      };
-
-      // Use Edge Function to process the booking
-      const result = await edgeFunctionsService.completeBooking(
-        bookingData,
-        event?.title || "Event",
-        event?.start_date || new Date().toISOString()
-      );
-
-      console.log("Booking completed:", result);
-      setBookingComplete(true);
-    } catch (error: any) {
-      console.error("Booking error:", error);
-      setErrors({
-        general:
-          error.message || "Failed to complete booking. Please try again.",
+      const response = await apiService.createBooking({
+        event_id: event.id,
+        items: ticketSelections,
+        customer_name: customerName,
+        customer_email: customerEmail,
       });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response?.checkout_url) {
+        // Redirect to Stripe Checkout
+        router.push(response.checkout_url);
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to create checkout session. Please try again."
+      );
     } finally {
-      setSubmitting(false);
+      setProcessing(false);
     }
   };
 
-  const handleInputChange =
-    (field: keyof BookingFormData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: e.target.value,
-      }));
+  const formatDate = (date: string, time: string) => {
+    const dateTime = new Date(`${date}T${time}`);
+    return dateTime.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
 
-      if (errors[field]) {
-        setErrors((prev) => ({
-          ...prev,
-          [field]: undefined,
-        }));
-      }
-    };
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(":");
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes));
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 py-12">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="h-8 bg-gray-200 animate-pulse rounded w-64 mb-8" />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="h-4 bg-gray-200 animate-pulse rounded" />
-                        <div className="h-4 bg-gray-200 animate-pulse rounded" />
-                        <div className="h-4 bg-gray-200 animate-pulse rounded" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-                <div>
-                  <Card>
-                    <CardHeader>
-                      <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="h-4 bg-gray-200 animate-pulse rounded" />
-                        <div className="h-4 bg-gray-200 animate-pulse rounded" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-        <Footer />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+          <p className="mt-4">Loading event details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            Event Not Found
+          </h1>
+          <p className="text-gray-600 mb-8">{error}</p>
+          <Button onClick={() => router.push("/events")}>Browse Events</Button>
+        </div>
       </div>
     );
   }
 
   if (!event) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center py-12">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Event Not Found
-            </h1>
-            <p className="text-gray-600 mb-6">
-              The event you're looking for doesn't exist.
-            </p>
-            <Button onClick={() => router.push("/events")}>
-              Browse Events
-            </Button>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  if (bookingComplete) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center py-12">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="w-8 h-8 text-green-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Booking Confirmed!
-            </h1>
-            <p className="text-gray-600 mb-6">
-              Your booking for <strong>{event.title}</strong> has been
-              confirmed. You'll receive a confirmation email shortly.
-            </p>
-            <div className="space-y-3">
-              <Button onClick={() => router.push("/events")} className="w-full">
-                Browse More Events
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/")}
-                className="w-full"
-              >
-                Go to Homepage
-              </Button>
-            </div>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/events/${slug}`)}
+            className="mb-4"
+          >
+            ← Back to Event
+          </Button>
 
-      <main className="flex-1 py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            {/* Back Button */}
-            <Button
-              variant="ghost"
-              onClick={() => router.back()}
-              className="mb-6"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Event
-            </Button>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Book Tickets
+          </h1>
+          <h2 className="text-xl text-gray-600">{event.title}</h2>
+        </div>
 
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">
-              Book Tickets for {event.title}
-            </h1>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Event Details */}
+          <div className="lg:col-span-2">
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Event Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar className="h-4 w-4" />
+                  <span>{formatDate(event.start_date, event.start_time)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Clock className="h-4 w-4" />
+                  <span>
+                    {formatTime(event.start_time)} -{" "}
+                    {formatTime(event.end_time)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <MapPin className="h-4 w-4" />
+                  <span>{event.location_name}</span>
+                </div>
+                {event.location_address && (
+                  <p className="text-sm text-gray-500 ml-6">
+                    {event.location_address}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Event Details & Ticket Selection */}
-              <div className="space-y-6">
-                {/* Event Summary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Event Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center text-gray-600">
-                      <Calendar className="w-5 h-5 mr-3" />
-                      <div>
-                        <div className="font-medium">
-                          {new Date(event.start_date).toLocaleDateString(
-                            "en-US",
-                            {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
-                        </div>
-                        <div className="text-sm">
-                          {new Date(event.start_date).toLocaleTimeString(
-                            "en-US",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                          {event.end_date &&
-                            ` - ${new Date(event.end_date).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}`}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="w-5 h-5 mr-3" />
-                      <div>
-                        <div className="font-medium">{event.location_name}</div>
-                        <div className="text-sm">{event.location_address}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center text-gray-600">
-                      <Users className="w-5 h-5 mr-3" />
-                      <span>Organized by {event.organizers.business_name}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Ticket Selection */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Select Tickets</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+            {/* Ticket Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Select Tickets</CardTitle>
+                <CardDescription>
+                  Choose the number of tickets you'd like to purchase
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {event.ticket_types && event.ticket_types.length > 0 ? (
+                  <div className="space-y-4">
                     {event.ticket_types.map((ticketType) => {
-                      const quantity = getTicketQuantity(ticketType.id);
-                      const available =
+                      const availableQuantity =
                         ticketType.quantity_available -
                         ticketType.quantity_sold;
+                      const selectedQuantity = getTicketQuantity(ticketType.id);
+                      const maxQuantity = Math.min(
+                        availableQuantity,
+                        ticketType.max_per_order || 10
+                      );
 
                       return (
                         <div
                           key={ticketType.id}
-                          className="border rounded-lg p-4"
+                          className="flex items-center justify-between p-4 border rounded-lg"
                         >
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h4 className="font-semibold">
-                                {ticketType.name}
-                              </h4>
-                              {ticketType.description && (
-                                <p className="text-sm text-gray-600">
-                                  {ticketType.description}
-                                </p>
-                              )}
-                              <p className="text-sm text-gray-500 mt-1">
-                                {available} tickets available
+                          <div className="flex-1">
+                            <h3 className="font-medium">{ticketType.name}</h3>
+                            {ticketType.description && (
+                              <p className="text-sm text-gray-600 mt-1">
+                                {ticketType.description}
                               </p>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold">
-                                ${ticketType.price.toFixed(2)}
-                              </div>
-                            </div>
+                            )}
+                            <p className="text-lg font-semibold text-green-600 mt-2">
+                              ${ticketType.price.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {availableQuantity} available
+                            </p>
                           </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  updateTicketQuantity(
-                                    ticketType.id,
-                                    Math.max(0, quantity - 1)
-                                  )
-                                }
-                                disabled={quantity === 0}
-                              >
-                                <Minus className="w-4 h-4" />
-                              </Button>
-                              <span className="w-8 text-center font-medium">
-                                {quantity}
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  updateTicketQuantity(
-                                    ticketType.id,
-                                    quantity + 1
-                                  )
-                                }
-                                disabled={quantity >= available}
-                              >
-                                <Plus className="w-4 h-4" />
-                              </Button>
-                            </div>
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                updateTicketQuantity(
+                                  ticketType.id,
+                                  Math.max(0, selectedQuantity - 1)
+                                )
+                              }
+                              disabled={selectedQuantity === 0}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
 
-                            {quantity > 0 && (
-                              <div className="text-right">
-                                <div className="font-semibold">
-                                  ${(ticketType.price * quantity).toFixed(2)}
-                                </div>
-                              </div>
-                            )}
+                            <span className="w-8 text-center font-medium">
+                              {selectedQuantity}
+                            </span>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                updateTicketQuantity(
+                                  ticketType.id,
+                                  selectedQuantity + 1
+                                )
+                              }
+                              disabled={
+                                selectedQuantity >= maxQuantity ||
+                                availableQuantity === 0
+                              }
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       );
                     })}
-                  </CardContent>
-                </Card>
-              </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">
+                      No tickets available for this event.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-              {/* Booking Form & Summary */}
-              <div className="space-y-6">
-                {/* Order Summary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Order Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {ticketSelections.length === 0 ? (
-                      <p className="text-gray-500">No tickets selected</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {ticketSelections.map((ticket) => (
+          {/* Booking Summary */}
+          <div>
+            <Card className="sticky top-8">
+              <CardHeader>
+                <CardTitle>Booking Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {ticketSelections.length > 0 ? (
+                  <>
+                    <div className="space-y-2">
+                      {ticketSelections.map((selection) => {
+                        const ticketType = event.ticket_types.find(
+                          (tt) => tt.id === selection.ticket_type_id
+                        );
+                        if (!ticketType) return null;
+
+                        return (
                           <div
-                            key={ticket.ticketTypeId}
-                            className="flex justify-between"
+                            key={selection.ticket_type_id}
+                            className="flex justify-between text-sm"
                           >
                             <span>
-                              {ticket.name} × {ticket.quantity}
+                              {selection.quantity}x {ticketType.name}
                             </span>
                             <span>
-                              ${(ticket.price * ticket.quantity).toFixed(2)}
+                              $
+                              {(ticketType.price * selection.quantity).toFixed(
+                                2
+                              )}
                             </span>
                           </div>
-                        ))}
-                        <div className="border-t pt-3">
-                          <div className="flex justify-between font-bold text-lg">
-                            <span>
-                              Total ({getTotalTickets()} ticket
-                              {getTotalTickets() !== 1 ? "s" : ""})
-                            </span>
-                            <span>${getTotalPrice().toFixed(2)}</span>
-                          </div>
-                        </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="border-t pt-2">
+                      <div className="flex justify-between font-medium">
+                        <span>Subtotal ({getTotalTickets()} tickets)</span>
+                        <span>${getTotalPrice().toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-gray-600 mt-1">
+                        <span>Platform fee (5%)</span>
+                        <span>${(getTotalPrice() * 0.05).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t">
+                        <span>Total</span>
+                        <span>${(getTotalPrice() * 1.05).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input
+                        id="name"
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Your full name"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        required
+                      />
+                    </div>
+
+                    {error && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                        <p className="text-sm text-red-600">{error}</p>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
 
-                {/* Booking Form */}
-                {ticketSelections.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Attendee Information</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Form onSubmit={handleSubmit}>
-                        {errors.general && (
-                          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-                            <FormMessage>{errors.general}</FormMessage>
-                          </div>
-                        )}
+                    <Button
+                      onClick={handleCheckout}
+                      disabled={processing || !customerEmail || !customerName}
+                      className="w-full flex items-center gap-2"
+                    >
+                      {processing ? (
+                        "Processing..."
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          Proceed to Payment
+                        </>
+                      )}
+                    </Button>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField>
-                            <FormLabel htmlFor="firstName">
-                              First Name
-                            </FormLabel>
-                            <Input
-                              id="firstName"
-                              type="text"
-                              value={formData.firstName}
-                              onChange={handleInputChange("firstName")}
-                              className={
-                                errors.firstName ? "border-red-500" : ""
-                              }
-                              disabled={submitting}
-                            />
-                            {errors.firstName && (
-                              <FormMessage>{errors.firstName}</FormMessage>
-                            )}
-                          </FormField>
-
-                          <FormField>
-                            <FormLabel htmlFor="lastName">Last Name</FormLabel>
-                            <Input
-                              id="lastName"
-                              type="text"
-                              value={formData.lastName}
-                              onChange={handleInputChange("lastName")}
-                              className={
-                                errors.lastName ? "border-red-500" : ""
-                              }
-                              disabled={submitting}
-                            />
-                            {errors.lastName && (
-                              <FormMessage>{errors.lastName}</FormMessage>
-                            )}
-                          </FormField>
-                        </div>
-
-                        <FormField>
-                          <FormLabel htmlFor="email">Email Address</FormLabel>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={formData.email}
-                            onChange={handleInputChange("email")}
-                            className={errors.email ? "border-red-500" : ""}
-                            disabled={submitting}
-                          />
-                          {errors.email && (
-                            <FormMessage>{errors.email}</FormMessage>
-                          )}
-                        </FormField>
-
-                        <FormField>
-                          <FormLabel htmlFor="phone">Phone Number</FormLabel>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            value={formData.phone}
-                            onChange={handleInputChange("phone")}
-                            className={errors.phone ? "border-red-500" : ""}
-                            disabled={submitting}
-                          />
-                          {errors.phone && (
-                            <FormMessage>{errors.phone}</FormMessage>
-                          )}
-                        </FormField>
-
-                        <FormField>
-                          <FormLabel htmlFor="specialRequests">
-                            Special Requests (Optional)
-                          </FormLabel>
-                          <textarea
-                            id="specialRequests"
-                            rows={3}
-                            value={formData.specialRequests}
-                            onChange={handleInputChange("specialRequests")}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Any special requirements or requests..."
-                            disabled={submitting}
-                          />
-                        </FormField>
-
-                        {!user && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                            <div className="flex items-center">
-                              <Shield className="w-5 h-5 text-blue-600 mr-2" />
-                              <span className="text-sm text-blue-800">
-                                You'll need to sign in to complete your booking
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        <Button
-                          type="submit"
-                          className="w-full"
-                          disabled={submitting || ticketSelections.length === 0}
-                        >
-                          {submitting ? (
-                            "Processing..."
-                          ) : user ? (
-                            <>
-                              <CreditCard className="w-4 h-4 mr-2" />
-                              Complete Booking - ${getTotalPrice().toFixed(2)}
-                            </>
-                          ) : (
-                            "Sign In to Book"
-                          )}
-                        </Button>
-                      </Form>
-                    </CardContent>
-                  </Card>
+                    <p className="text-xs text-gray-500 text-center">
+                      Secure payment powered by Stripe
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600">
+                      Select tickets to see pricing
+                    </p>
+                  </div>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
-      </main>
-
-      <Footer />
+      </div>
     </div>
   );
 }

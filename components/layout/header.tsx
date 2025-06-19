@@ -73,6 +73,28 @@ export function Header() {
             >
               Organizers
             </Link>
+            <Link
+              href="/become-organizer"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+            >
+              Become Organizer
+            </Link>
+            {user && (
+              <>
+                <Link
+                  href="/my-bookings"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                >
+                  My Bookings
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                >
+                  Dashboard
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* Desktop Auth Buttons - Cleaner design */}
@@ -151,45 +173,70 @@ export function Header() {
               >
                 Organizers
               </Link>
-              <div className="pt-4 space-y-3 border-t border-border/50">
-                {loading ? (
-                  <div className="w-full h-8 bg-gray-200 animate-pulse rounded" />
-                ) : user ? (
-                  <div className="space-y-3">
-                    <div className="text-sm text-muted-foreground">
-                      Welcome, {user.user_metadata?.first_name || user.email}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSignOut}
-                      className="w-full justify-start text-muted-foreground hover:text-foreground"
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start text-muted-foreground hover:text-foreground"
-                      asChild
-                    >
-                      <Link href="/auth/signin">Sign In</Link>
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="w-full btn-clean btn-primary"
-                      asChild
-                    >
-                      <Link href="/auth/signup">Sign Up</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
+              <Link
+                href="/become-organizer"
+                className="block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Become Organizer
+              </Link>
+              {user && (
+                <>
+                  <Link
+                    href="/my-bookings"
+                    className="block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    My Bookings
+                  </Link>
+                  <Link
+                    href="/dashboard"
+                    className="block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                </>
+              )}
             </nav>
+            <div className="pt-4 space-y-3 border-t border-border/50">
+              {loading ? (
+                <div className="w-full h-8 bg-gray-200 animate-pulse rounded" />
+              ) : user ? (
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    Welcome, {user.user_metadata?.first_name || user.email}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="w-full justify-start text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-muted-foreground hover:text-foreground"
+                    asChild
+                  >
+                    <Link href="/auth/signin">Sign In</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="w-full btn-clean btn-primary"
+                    asChild
+                  >
+                    <Link href="/auth/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

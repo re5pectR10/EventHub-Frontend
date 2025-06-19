@@ -1,139 +1,15 @@
 import { createClient } from "@/utils/supabase/client";
+import type {
+  Event,
+  Category,
+  Organizer,
+  Booking,
+  EventSearchParams,
+  ApiResponse,
+  TicketType,
+} from "@/lib/types";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-
-export interface Event {
-  id: string;
-  title: string;
-  description: string;
-  slug: string;
-  start_date: string;
-  end_date: string;
-  location_name: string;
-  location_address: string;
-  location_latitude?: number;
-  location_longitude?: number;
-  status: "draft" | "published" | "cancelled";
-  featured: boolean;
-  created_at: string;
-  updated_at: string;
-  organizers: {
-    id: string;
-    business_name: string;
-    contact_email?: string;
-    description?: string;
-    website?: string;
-  };
-  event_categories: {
-    name: string;
-    slug: string;
-  };
-  event_images: Array<{
-    image_url: string;
-    alt_text?: string;
-    is_primary: boolean;
-    display_order: number;
-  }>;
-  ticket_types: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    price: number;
-    quantity_available: number;
-    quantity_sold: number;
-  }>;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  icon?: string;
-  created_at: string;
-}
-
-export interface Organizer {
-  id: string;
-  name: string;
-  business_name?: string;
-  description?: string;
-  contact_email?: string;
-  website?: string;
-  logo_url?: string;
-  location?: string;
-  created_at: string;
-  updated_at: string;
-  events_count?: number;
-}
-
-export interface Booking {
-  id: string;
-  user_id: string;
-  event_id: string;
-  total_price: number;
-  customer_name: string;
-  customer_email: string;
-  customer_phone?: string;
-  status: "pending" | "confirmed" | "cancelled";
-  payment_intent_id?: string;
-  created_at: string;
-  updated_at: string;
-  events: {
-    title: string;
-    start_date: string;
-    start_time: string;
-    location_name: string;
-    location_address?: string;
-  };
-  booking_items: Array<{
-    quantity: number;
-    unit_price: number;
-    total_price: number;
-    ticket_types: {
-      name: string;
-      description?: string;
-    };
-  }>;
-  tickets: Array<{
-    id: string;
-    ticket_code: string;
-    qr_code: string;
-    status: string;
-    scanned_at?: string;
-  }>;
-}
-
-export interface EventSearchParams {
-  query?: string;
-  category?: string;
-  featured?: boolean;
-  date_from?: string;
-  date_to?: string;
-  location?: string;
-  latitude?: number;
-  longitude?: number;
-  radius?: number;
-  sort?: "date_asc" | "date_desc" | "price_asc" | "price_desc";
-  page?: number;
-  limit?: number;
-}
-
-export interface ApiResponse<T> {
-  data?: T;
-  events?: Event[];
-  categories?: Category[];
-  bookings?: Booking[];
-  booking?: Booking;
-  organizer?: Organizer;
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-  error?: string;
-}
 
 class ApiService {
   private supabase = createClient();
@@ -206,12 +82,12 @@ class ApiService {
     return this.fetchWithAuth<Event[]>("events", "/featured");
   }
 
-  async getEvent(identifier: string): Promise<ApiResponse<Event>> {
-    const response = await this.fetchWithAuth<any>("events", `/${identifier}`);
-    if ((response as any).event) {
-      return { data: (response as any).event };
-    }
-    return response;
+  async getEvent(id: string): Promise<ApiResponse<Event>> {
+    return this.fetchWithAuth<Event>("events", `/${id}`);
+  }
+
+  async getEventBySlug(slug: string): Promise<ApiResponse<Event>> {
+    return this.fetchWithAuth<Event>("events", `/slug/${slug}`);
   }
 
   async createEvent(eventData: Partial<Event>): Promise<ApiResponse<Event>> {
@@ -231,10 +107,102 @@ class ApiService {
     });
   }
 
+  async updateEventStatus(
+    id: string,
+    status: "draft" | "published" | "cancelled"
+  ): Promise<ApiResponse<Event>> {
+    return this.fetchWithAuth<Event>("events", `/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async deleteEvent(id: string): Promise<ApiResponse<void>> {
     return this.fetchWithAuth<void>("events", `/${id}`, {
       method: "DELETE",
     });
+  }
+
+  // Ticket Types
+  async createTicketType(ticketData: {
+    event_id: string;
+    name: string;
+    description?: string;
+    price: number;
+    quantity_available: number;
+    sale_start_date?: string;
+    sale_end_date?: string;
+    max_per_order?: number;
+  }): Promise<ApiResponse<TicketType>> {
+    return this.fetchWithAuth<TicketType>("ticket-types", "", {
+      method: "POST",
+      body: JSON.stringify(ticketData),
+    });
+  }
+
+  async updateTicketType(
+    id: string,
+    ticketData: Partial<TicketType>
+  ): Promise<ApiResponse<TicketType>> {
+    return this.fetchWithAuth<TicketType>("ticket-types", `/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(ticketData),
+    });
+  }
+
+  async deleteTicketType(id: string): Promise<ApiResponse<void>> {
+    return this.fetchWithAuth<void>("ticket-types", `/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Note: getEventTicketTypes removed as ticket types are included in getEvent response
+
+  // Stripe Connect
+  async createStripeConnectAccount(): Promise<
+    ApiResponse<{ account_link_url: string }>
+  > {
+    return this.fetchWithAuth<{ account_link_url: string }>(
+      "stripe",
+      "/connect/create",
+      {
+        method: "POST",
+      }
+    );
+  }
+
+  async getStripeConnectStatus(): Promise<
+    ApiResponse<{
+      account_id?: string;
+      verification_status?: string;
+      charges_enabled?: boolean;
+      payouts_enabled?: boolean;
+    }>
+  > {
+    return this.fetchWithAuth<{
+      account_id?: string;
+      verification_status?: string;
+      charges_enabled?: boolean;
+      payouts_enabled?: boolean;
+    }>("stripe", "/connect/status");
+  }
+
+  async createStripeCheckoutSession(data: {
+    event_id: string;
+    tickets: Array<{
+      ticket_type_id: string;
+      quantity: number;
+    }>;
+    customer_email?: string;
+  }): Promise<ApiResponse<{ checkout_url: string; session_id: string }>> {
+    return this.fetchWithAuth<{ checkout_url: string; session_id: string }>(
+      "stripe",
+      "/checkout/create",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
   }
 
   // Categories
@@ -271,12 +239,31 @@ class ApiService {
   }
 
   async getOrganizerEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetchWithAuth<Event[]>("organizers", "/events");
+    return this.fetchWithAuth<Event[]>("events", "/my-events");
+  }
+
+  // Get single event for organizer (includes their own draft events)
+  async getOrganizerEvent(id: string): Promise<ApiResponse<Event>> {
+    // Try to get from organizer's events first
+    const organizerEventsResponse = await this.getOrganizerEvents();
+    if (organizerEventsResponse.events) {
+      const event = organizerEventsResponse.events.find((e) => e.id === id);
+      if (event) {
+        return { event };
+      }
+    }
+
+    // Fallback to regular getEvent
+    return this.getEvent(id);
   }
 
   // Bookings
   async getBookings(): Promise<ApiResponse<Booking[]>> {
     return this.fetchWithAuth<Booking[]>("bookings", "");
+  }
+
+  async getOrganizerBookings(): Promise<ApiResponse<Booking[]>> {
+    return this.fetchWithAuth<Booking[]>("bookings", "/organizer");
   }
 
   async getBooking(id: string): Promise<ApiResponse<Booking>> {

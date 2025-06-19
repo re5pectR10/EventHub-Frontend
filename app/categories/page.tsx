@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, Tag, ArrowRight } from "lucide-react";
-import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiService, type Category } from "@/lib/api";
+import { apiService } from "@/lib/api";
+import type { Category } from "@/lib/types";
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -88,8 +88,6 @@ export default function CategoriesPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
-
       <main className="flex-1">
         {/* Hero Section */}
         <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12">

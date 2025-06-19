@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -16,14 +16,15 @@ import {
   ArrowLeft,
   Tag,
 } from "lucide-react";
-import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiService, type Event } from "@/lib/api";
+import { apiService } from "@/lib/api";
+import type { Event } from "@/lib/types";
 
 export default function EventDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -39,12 +40,16 @@ export default function EventDetailPage() {
       setError(null);
 
       try {
-        const response = await apiService.getEvent(slug);
+        const response = await apiService.getEventBySlug(slug);
 
         if (response.error) {
           setError(response.error);
         } else if (response.data) {
           setEvent(response.data);
+        } else if (response.event) {
+          setEvent(response.event);
+        } else {
+          setError("No event data received");
         }
       } catch (err) {
         setError("Failed to fetch event details");
@@ -59,7 +64,6 @@ export default function EventDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Header />
         <main className="flex-1 container-clean py-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
@@ -79,7 +83,6 @@ export default function EventDetailPage() {
   if (error || !event) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Header />
         <main className="flex-1 container-clean py-8">
           <div className="text-center py-12">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
@@ -138,8 +141,6 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
-
       <main className="flex-1">
         {/* Breadcrumb */}
         <div className="border-b bg-gray-50">
@@ -368,6 +369,9 @@ export default function EventDetailPage() {
                         disabled={
                           ticket.quantity_available <= ticket.quantity_sold
                         }
+                        onClick={() =>
+                          router.push(`/events/${params.slug}/book`)
+                        }
                       >
                         {ticket.quantity_available <= ticket.quantity_sold
                           ? "Sold Out"
@@ -379,7 +383,14 @@ export default function EventDetailPage() {
                   {event.ticket_types?.length === 0 && (
                     <div className="text-center py-4">
                       <p className="text-gray-600 mb-4">This is a free event</p>
-                      <Button className="w-full">Register for Free</Button>
+                      <Button
+                        className="w-full"
+                        onClick={() =>
+                          router.push(`/events/${params.slug}/book`)
+                        }
+                      >
+                        Register for Free
+                      </Button>
                     </div>
                   )}
                 </CardContent>

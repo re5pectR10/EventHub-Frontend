@@ -5,12 +5,7 @@ import Link from "next/link";
 import { Calendar, MapPin, Users, Tag } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { Event } from "@/lib/api";
-
-interface EventCardProps {
-  event: Event;
-  className?: string;
-}
+import type { Event, EventCardProps } from "@/lib/types";
 
 export function EventCard({ event, className }: EventCardProps) {
   const primaryImage =
