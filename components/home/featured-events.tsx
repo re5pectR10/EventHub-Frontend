@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Calendar, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { apiService, type Event } from "@/lib/api";
+import { apiService } from "@/lib/api";
+import type { Event } from "@/lib/types";
 
 export function FeaturedEvents() {
   const [events, setEvents] = useState<Event[]>([]);

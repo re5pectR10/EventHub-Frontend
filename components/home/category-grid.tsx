@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { apiService, type Category } from "@/lib/api";
+import { apiService } from "@/lib/api";
+import type { Category } from "@/lib/types";
 
 export function CategoryGrid() {
   const [categories, setCategories] = useState<Category[]>([]);
