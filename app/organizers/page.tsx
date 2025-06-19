@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiService } from "@/lib/api";
-import type { Organizer } from "@/lib/api";
+import type { Organizer } from "@/lib/types";
 
 export default function OrganizersPage() {
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
