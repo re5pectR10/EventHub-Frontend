@@ -8,8 +8,45 @@ import type {
   ApiResponse,
   TicketType,
 } from "@/lib/types";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+
+// Query Keys - centralized for consistency
+export const QUERY_KEYS = {
+  events: {
+    all: ["events"] as const,
+    lists: () => [...QUERY_KEYS.events.all, "list"] as const,
+    list: (params: EventSearchParams) =>
+      [...QUERY_KEYS.events.lists(), params] as const,
+    details: () => [...QUERY_KEYS.events.all, "detail"] as const,
+    detail: (slug: string) => [...QUERY_KEYS.events.details(), slug] as const,
+    featured: ["events", "featured"] as const,
+  },
+  categories: {
+    all: ["categories"] as const,
+  },
+  organizers: {
+    all: ["organizers"] as const,
+    lists: () => [...QUERY_KEYS.organizers.all, "list"] as const,
+    details: () => [...QUERY_KEYS.organizers.all, "detail"] as const,
+    detail: (id: string) => [...QUERY_KEYS.organizers.details(), id] as const,
+    profile: ["organizers", "profile"] as const,
+    events: ["organizers", "events"] as const,
+  },
+  bookings: {
+    all: ["bookings"] as const,
+    lists: () => [...QUERY_KEYS.bookings.all, "list"] as const,
+    details: () => [...QUERY_KEYS.bookings.all, "detail"] as const,
+    detail: (id: string) => [...QUERY_KEYS.bookings.details(), id] as const,
+    userBookings: ["bookings", "user"] as const,
+  },
+  tickets: {
+    all: ["tickets"] as const,
+    byEvent: (eventId: string) =>
+      [...QUERY_KEYS.tickets.all, "event", eventId] as const,
+  },
+} as const;
 
 class ApiService {
   private supabase = createClient();
@@ -220,6 +257,10 @@ class ApiService {
     return this.fetchWithAuth<Organizer>("organizers", "/profile");
   }
 
+  async getOrganizerById(id: string): Promise<ApiResponse<Organizer>> {
+    return this.fetchWithAuth<Organizer>("organizers", `/${id}`);
+  }
+
   async createOrganizerProfile(
     organizerData: Partial<Organizer>
   ): Promise<ApiResponse<Organizer>> {
@@ -303,3 +344,236 @@ class ApiService {
 }
 
 export const apiService = new ApiService();
+
+// Custom React Query Hooks
+
+// Events Hooks
+export function useEvents(params: EventSearchParams = {}) {
+  return useQuery({
+    queryKey: QUERY_KEYS.events.list(params),
+    queryFn: () => apiService.getEvents(params),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useFeaturedEvents() {
+  return useQuery({
+    queryKey: QUERY_KEYS.events.featured,
+    queryFn: async () => {
+      const response = await apiService.getFeaturedEvents();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.events || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useEventBySlug(slug: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.events.detail(slug),
+    queryFn: async () => {
+      const response = await apiService.getEventBySlug(slug);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.event;
+    },
+    enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Categories Hooks
+export function useCategories() {
+  return useQuery({
+    queryKey: QUERY_KEYS.categories.all,
+    queryFn: async () => {
+      const response = await apiService.getCategories();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.categories || [];
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Organizers Hooks
+export function useOrganizers() {
+  return useQuery({
+    queryKey: QUERY_KEYS.organizers.lists(),
+    queryFn: async () => {
+      const response = await apiService.getCategories(); // No getOrganizers method exists
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useOrganizerById(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.organizers.detail(id),
+    queryFn: async () => {
+      const response = await apiService.getOrganizerById(id);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useOrganizerProfile() {
+  return useQuery({
+    queryKey: QUERY_KEYS.organizers.profile,
+    queryFn: async () => {
+      const response = await apiService.getOrganizerProfile();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useOrganizerEvents() {
+  return useQuery({
+    queryKey: QUERY_KEYS.organizers.events,
+    queryFn: async () => {
+      const response = await apiService.getOrganizerEvents();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data || [];
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Bookings Hooks
+export function useUserBookings() {
+  return useQuery({
+    queryKey: QUERY_KEYS.bookings.userBookings,
+    queryFn: async () => {
+      const response = await apiService.getOrganizerBookings();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data || [];
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useBookingById(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.bookings.detail(id),
+    queryFn: async () => {
+      const response = await apiService.getBooking(id);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    enabled: !!id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Tickets Hooks - No getTicketsByEvent method exists, tickets come with event data
+export function useTicketsByEvent(eventId: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.tickets.byEvent(eventId),
+    queryFn: async () => {
+      const response = await apiService.getEvent(eventId);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data?.ticket_types || [];
+    },
+    enabled: !!eventId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Mutations
+export function useCreateBooking() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bookingData: any) => apiService.createBooking(bookingData),
+    onSuccess: () => {
+      // Invalidate and refetch bookings
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.bookings.userBookings,
+      });
+    },
+  });
+}
+
+export function useCreateTicket() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ticketData: any) => apiService.createTicketType(ticketData),
+    onSuccess: (data, variables) => {
+      // Invalidate tickets for the specific event
+      if (variables.event_id) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.tickets.byEvent(variables.event_id),
+        });
+      }
+    },
+  });
+}
+
+export function useUpdateTicket() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ticketData }: { id: string; ticketData: any }) =>
+      apiService.updateTicketType(id, ticketData),
+    onSuccess: (data, variables) => {
+      // Invalidate tickets for the specific event
+      if (variables.ticketData.event_id) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.tickets.byEvent(variables.ticketData.event_id),
+        });
+      }
+    },
+  });
+}
+
+export function useDeleteTicket() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, eventId }: { id: string; eventId: string }) =>
+      apiService.deleteTicketType(id),
+    onSuccess: (data, variables) => {
+      // Invalidate tickets for the specific event
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.tickets.byEvent(variables.eventId),
+      });
+    },
+  });
+}

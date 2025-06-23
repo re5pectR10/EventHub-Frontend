@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -21,12 +21,10 @@ import {
   TicketIcon,
 } from "lucide-react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
-import { apiService } from "@/lib/api";
+import { useOrganizerEvents, apiService } from "@/lib/api";
 import type { Event } from "@/lib/types";
 
 export default function EventsManagementPage() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,33 +32,18 @@ export default function EventsManagementPage() {
   const supabase = createClient();
   const router = useRouter();
 
-  useEffect(() => {
-    async function loadEvents() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/auth/signin");
-          return;
-        }
+  // Use React Query hook for events data
+  const {
+    data: events = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useOrganizerEvents();
 
-        const response = await apiService.getOrganizerEvents();
-
-        if (response.error) {
-          setError(response.error);
-        } else {
-          setEvents(response.events || []);
-        }
-      } catch (error) {
-        console.error("Error loading events:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadEvents();
-  }, []);
+  // Set error from query if exists
+  if (queryError && !error) {
+    setError(queryError.message);
+  }
 
   const handleDeleteEvent = async (eventId: string) => {
     if (
@@ -81,7 +64,8 @@ export default function EventsManagementPage() {
         throw new Error(response.error);
       }
 
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
+      // Refetch events after deletion
+      await refetch();
     } catch (error) {
       console.error("Error deleting event:", error);
       setError(
@@ -108,11 +92,8 @@ export default function EventsManagementPage() {
         throw new Error(response.error);
       }
 
-      setEvents((prev) =>
-        prev.map((event) =>
-          event.id === eventId ? { ...event, status: newStatus } : event
-        )
-      );
+      // Refetch events after status update
+      await refetch();
     } catch (error) {
       console.error("Error updating event status:", error);
       setError(

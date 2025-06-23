@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   MapPin,
@@ -8,54 +9,61 @@ import {
   Users,
   Star,
   ExternalLink,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiService } from "@/lib/api";
+import { toast } from "@/lib/notifications";
 import type { Organizer } from "@/lib/types";
 
 export default function OrganizersPage() {
-  const [organizers, setOrganizers] = useState<Organizer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredOrganizers, setFilteredOrganizers] = useState<Organizer[]>([]);
 
-  useEffect(() => {
-    const fetchOrganizers = async () => {
-      try {
-        setLoading(true);
-        const data = await apiService.getOrganizers();
-        setOrganizers(data);
-        setFilteredOrganizers(data);
-      } catch (error) {
-        console.error("Failed to fetch organizers:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch organizers using React Query
+  const {
+    data: organizers = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["organizers"],
+    queryFn: async () => {
+      const data = await apiService.getOrganizers();
+      return data;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
 
-    fetchOrganizers();
-  }, []);
+  // Filter organizers based on search query
+  const filteredOrganizers = useMemo(() => {
+    if (!searchQuery.trim()) return organizers;
 
-  useEffect(() => {
-    const filtered = organizers.filter(
-      (organizer) =>
-        organizer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        organizer.description
-          ?.toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        organizer.location?.toLowerCase().includes(searchQuery.toLowerCase())
+    const query = searchQuery.toLowerCase();
+    return organizers.filter(
+      (organizer: Organizer) =>
+        organizer.business_name?.toLowerCase().includes(query) ||
+        organizer.description?.toLowerCase().includes(query) ||
+        organizer.location?.toLowerCase().includes(query)
     );
-    setFilteredOrganizers(filtered);
-  }, [searchQuery, organizers]);
+  }, [organizers, searchQuery]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
 
-  if (loading) {
+  const handleRetry = () => {
+    refetch();
+    toast.success("Refreshing organizers...");
+  };
+
+  // Loading state
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col">
         <main className="flex-1 py-12">
@@ -78,6 +86,34 @@ export default function OrganizersPage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <main className="flex-1 py-12">
+          <div className="container mx-auto px-4">
+            <div className="text-center py-12">
+              <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Failed to Load Organizers
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {error instanceof Error
+                  ? error.message
+                  : "Something went wrong while loading organizers."}
+              </p>
+              <Button onClick={handleRetry} className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4" />
+                Try Again
+              </Button>
             </div>
           </div>
         </main>
@@ -120,6 +156,9 @@ export default function OrganizersPage() {
             <p className="text-gray-600">
               {filteredOrganizers.length} organizer
               {filteredOrganizers.length !== 1 ? "s" : ""} found
+              {searchQuery && (
+                <span className="ml-2 text-sm">for "{searchQuery}"</span>
+              )}
             </p>
           </div>
 
@@ -147,7 +186,7 @@ export default function OrganizersPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredOrganizers.map((organizer) => (
+              {filteredOrganizers.map((organizer: Organizer) => (
                 <Card
                   key={organizer.id}
                   className="overflow-hidden hover:shadow-lg transition-shadow duration-300"
@@ -157,18 +196,26 @@ export default function OrganizersPage() {
                     {organizer.logo_url ? (
                       <img
                         src={organizer.logo_url}
-                        alt={organizer.name}
+                        alt={organizer.business_name || organizer.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = "none";
+                          target.nextElementSibling?.classList.remove("hidden");
+                        }}
                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Users className="w-16 h-16 text-white/80" />
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className={`w-full h-full flex items-center justify-center ${
+                        organizer.logo_url ? "hidden" : ""
+                      }`}
+                    >
+                      <Users className="w-16 h-16 text-white/80" />
+                    </div>
                     <div className="absolute inset-0 bg-black/20" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <h3 className="text-xl font-bold text-white mb-1">
-                        {organizer.name}
+                        {organizer.business_name || organizer.name}
                       </h3>
                     </div>
                   </div>

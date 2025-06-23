@@ -1,33 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/lib/api";
 import type { Category } from "@/lib/types";
 
 export function CategoryGrid() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchCategories() {
-      try {
-        const response = await apiService.getCategories();
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        setCategories(response.categories || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
+  const {
+    data: categories = [],
+    isLoading: loading,
+    error,
+  } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const response = await apiService.getCategories();
+      if (response.error) {
+        throw new Error(response.error);
       }
-    }
-
-    fetchCategories();
-  }, []);
+      return response.categories || [];
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+  });
 
   if (loading) {
     return (
@@ -55,7 +50,10 @@ export function CategoryGrid() {
       <section className="section-clean bg-secondary/30">
         <div className="container-clean text-center">
           <h2 className="mb-8">Browse by Category</h2>
-          <p className="text-destructive">Error loading categories: {error}</p>
+          <p className="text-destructive">
+            Error loading categories:{" "}
+            {error instanceof Error ? error.message : error}
+          </p>
         </div>
       </section>
     );

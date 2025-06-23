@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Calendar, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,27 +8,22 @@ import { apiService } from "@/lib/api";
 import type { Event } from "@/lib/types";
 
 export function FeaturedEvents() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchFeaturedEvents() {
-      try {
-        const response = await apiService.getFeaturedEvents();
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        setEvents(response.events || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
+  const {
+    data: events = [],
+    isLoading: loading,
+    error,
+  } = useQuery({
+    queryKey: ["featured-events"],
+    queryFn: async () => {
+      const response = await apiService.getFeaturedEvents();
+      if (response.error) {
+        throw new Error(response.error);
       }
-    }
-
-    fetchFeaturedEvents();
-  }, []);
+      return response.events || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
 
   if (loading) {
     return (
@@ -57,7 +52,10 @@ export function FeaturedEvents() {
       <section className="section-clean">
         <div className="container-clean text-center">
           <h2 className="mb-8">Featured Events</h2>
-          <p className="text-destructive">Error loading events: {error}</p>
+          <p className="text-destructive">
+            Error loading events:{" "}
+            {error instanceof Error ? error.message : error}
+          </p>
         </div>
       </section>
     );

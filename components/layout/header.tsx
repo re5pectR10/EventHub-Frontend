@@ -73,14 +73,15 @@ export function Header() {
             >
               Organizers
             </Link>
-            <Link
-              href="/become-organizer"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
-            >
-              Become Organizer
-            </Link>
+
             {user && (
               <>
+                <Link
+                  href="/become-organizer"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+                >
+                  Become Organizer
+                </Link>
                 <Link
                   href="/my-bookings"
                   className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"

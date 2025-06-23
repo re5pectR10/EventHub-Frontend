@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,8 +17,10 @@ import {
   Clock,
   CreditCard,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { apiService } from "@/lib/api";
+import { toast } from "@/lib/notifications";
 import type { Booking } from "@/lib/types";
 
 export default function CheckoutPage() {
@@ -31,62 +33,30 @@ export default function CheckoutPage() {
   const sessionId = searchParams.get("session_id");
   const isSuccess = searchParams.get("success") === "true";
 
-  const [booking, setBooking] = useState<Booking | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-
-  useEffect(() => {
-    async function loadBooking() {
-      try {
-        const response = await apiService.getBooking(bookingId);
-        if (response.error) {
-          setError(response.error);
-          return;
-        }
-        const bookingData = response.booking || response.data;
-        if (bookingData) {
-          setBooking(bookingData);
-
-          // Check if payment is already confirmed
-          if (bookingData.status === "confirmed") {
-            setPaymentSuccess(true);
-          }
-        } else {
-          setError("Booking not found");
-        }
-      } catch (error) {
-        console.error("Error loading booking:", error);
-        setError("Failed to load booking details");
-      } finally {
-        setLoading(false);
+  // Fetch booking data using React Query
+  const {
+    data: booking,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["booking", bookingId],
+    queryFn: async () => {
+      const response = await apiService.getBooking(bookingId);
+      if (response.error) {
+        throw new Error(response.error);
       }
-    }
+      return response.booking || response.data;
+    },
+    enabled: !!bookingId,
+    retry: 2,
+  });
 
-    if (bookingId) {
-      loadBooking();
-    }
-  }, [bookingId]);
+  // Create Stripe checkout session mutation
+  const createCheckoutMutation = useMutation({
+    mutationFn: async () => {
+      if (!booking) throw new Error("No booking data");
 
-  // Handle success callback from Stripe
-  useEffect(() => {
-    if (isSuccess && sessionId && booking) {
-      setPaymentSuccess(true);
-      // Optionally refresh booking data to get updated status
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    }
-  }, [isSuccess, sessionId, booking]);
-
-  const handlePayWithStripe = async () => {
-    if (!booking) return;
-
-    setProcessing(true);
-    setError(null);
-
-    try {
       // Prepare tickets data for Stripe checkout
       const tickets =
         booking.booking_items?.map((item) => ({
@@ -105,21 +75,27 @@ export default function CheckoutPage() {
         throw new Error(response.error);
       }
 
-      if (response.data?.checkout_url) {
-        // Redirect to Stripe Checkout
-        window.location.href = response.data.checkout_url;
-      } else {
+      if (!response.data?.checkout_url) {
         throw new Error("No checkout URL received");
       }
-    } catch (error) {
-      console.error("Stripe checkout error:", error);
-      setError(
+
+      return response.data.checkout_url;
+    },
+    onSuccess: (checkoutUrl) => {
+      // Redirect to Stripe Checkout
+      window.location.href = checkoutUrl;
+    },
+    onError: (error) => {
+      toast.error(
         error instanceof Error
           ? error.message
           : "Failed to create checkout session"
       );
-      setProcessing(false);
-    }
+    },
+  });
+
+  const handlePayWithStripe = () => {
+    createCheckoutMutation.mutate();
   };
 
   const formatDate = (date: string, time: string) => {
@@ -143,18 +119,25 @@ export default function CheckoutPage() {
     });
   };
 
-  if (loading) {
+  const handleRetry = () => {
+    refetch();
+    toast.success("Refreshing booking data...");
+  };
+
+  // Loading state
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-          <p className="mt-4">Loading checkout...</p>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading checkout...</p>
         </div>
       </div>
     );
   }
 
-  if (error && !booking) {
+  // Error state
+  if (error || !booking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -162,19 +145,28 @@ export default function CheckoutPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             Checkout Error
           </h1>
-          <p className="text-gray-600 mb-8">{error}</p>
-          <Button onClick={() => router.push("/events")}>Browse Events</Button>
+          <p className="text-gray-600 mb-8">
+            {error instanceof Error ? error.message : "Booking not found"}
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Button onClick={handleRetry} variant="outline">
+              Try Again
+            </Button>
+            <Button onClick={() => router.push("/events")}>
+              Browse Events
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!booking) {
-    return null;
-  }
+  // Check for success callback from Stripe or confirmed booking
+  const paymentSuccess = isSuccess && sessionId;
+  const isConfirmed = booking.status === "confirmed";
 
   // Show success state if payment is completed
-  if (paymentSuccess || booking.status === "confirmed") {
+  if (paymentSuccess || isConfirmed) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -340,11 +332,16 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {error && (
+            {/* Error Message */}
+            {createCheckoutMutation.error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-md">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-red-600" />
-                  <p className="text-sm text-red-600">{error}</p>
+                  <p className="text-sm text-red-600">
+                    {createCheckoutMutation.error instanceof Error
+                      ? createCheckoutMutation.error.message
+                      : "An error occurred"}
+                  </p>
                 </div>
               </div>
             )}
@@ -357,18 +354,18 @@ export default function CheckoutPage() {
                   router.push(`/events/${eventSlug}/book`);
                 }}
                 className="flex-1"
-                disabled={processing}
+                disabled={createCheckoutMutation.isPending}
               >
                 Back to Booking
               </Button>
               <Button
                 onClick={handlePayWithStripe}
-                disabled={processing}
+                disabled={createCheckoutMutation.isPending}
                 className="flex-1 flex items-center gap-2 bg-[#635BFF] hover:bg-[#5A52FF]"
               >
-                {processing ? (
+                {createCheckoutMutation.isPending ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Redirecting...
                   </>
                 ) : (

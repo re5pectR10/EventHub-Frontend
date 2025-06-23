@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,7 +16,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { apiService } from "@/lib/api";
 import { toast } from "@/lib/notifications";
-import { CheckCircle, Users, Calendar, TrendingUp } from "lucide-react";
+import {
+  CheckCircle,
+  Users,
+  Calendar,
+  TrendingUp,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 
 interface OrganizerProfile {
   business_name: string;
@@ -35,97 +43,95 @@ export default function BecomeOrganizerPage() {
     logo_url: "",
     location: "",
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [isAlreadyOrganizer, setIsAlreadyOrganizer] = useState(false);
 
   const supabase = createClient();
   const router = useRouter();
 
-  useEffect(() => {
-    async function checkUserStatus() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          router.push("/auth/signin");
-          return;
-        }
-
-        setUser(user);
-
-        // Check if user is already an organizer
-        const response = await apiService.getOrganizerProfile();
-        if (response.organizer) {
-          setIsAlreadyOrganizer(true);
-        }
-      } catch (error) {
-        console.error("Error checking user status:", error);
-      } finally {
-        setLoading(false);
+  // Check authentication
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    error: userError,
+  } = useQuery({
+    queryKey: ["user"],
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Not authenticated");
       }
-    }
+      return user;
+    },
+    retry: false,
+  });
 
-    checkUserStatus();
-  }, []);
+  // Check if user is already an organizer
+  const { data: existingOrganizer, isLoading: isLoadingOrganizer } = useQuery({
+    queryKey: ["organizer-profile"],
+    queryFn: async () => {
+      const response = await apiService.getOrganizerProfile();
+      return response.organizer || null;
+    },
+    enabled: !!user,
+    retry: false,
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const response = await apiService.createOrganizerProfile(profile);
-
+  // Create organizer profile mutation
+  const createOrganizerMutation = useMutation({
+    mutationFn: async (profileData: OrganizerProfile) => {
+      const response = await apiService.createOrganizerProfile(profileData);
       if (response.error) {
         throw new Error(response.error);
       }
-
-      setSuccess(
-        "Congratulations! Your organizer profile has been created successfully!"
-      );
+      return response;
+    },
+    onSuccess: () => {
       toast.success(
         "Welcome to the organizer community! Redirecting to your dashboard..."
       );
-
-      // Redirect to dashboard after 2 seconds
       setTimeout(() => {
         router.push("/dashboard");
       }, 2000);
-    } catch (error) {
-      console.error("Error creating organizer profile:", error);
-      setError(
+    },
+    onError: (error) => {
+      toast.error(
         error instanceof Error
           ? error.message
           : "Failed to create organizer profile. Please try again."
       );
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    createOrganizerMutation.mutate(profile);
   };
 
   const handleInputChange = (field: keyof OrganizerProfile, value: string) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
   };
 
-  if (loading) {
+  // Redirect to signin if not authenticated
+  if (userError) {
+    router.push("/auth/signin");
+    return null;
+  }
+
+  // Loading state
+  if (isLoadingUser || isLoadingOrganizer) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-          <p className="mt-4">Loading...</p>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (isAlreadyOrganizer) {
+  // Already an organizer
+  if (existingOrganizer) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -217,16 +223,29 @@ export default function BecomeOrganizerPage() {
           </CardHeader>
           <CardContent>
             {/* Error Message */}
-            {error && (
+            {createOrganizerMutation.error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-600">{error}</p>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <p className="text-sm text-red-600">
+                    {createOrganizerMutation.error instanceof Error
+                      ? createOrganizerMutation.error.message
+                      : "An error occurred"}
+                  </p>
+                </div>
               </div>
             )}
 
             {/* Success Message */}
-            {success && (
+            {createOrganizerMutation.isSuccess && (
               <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm text-green-600">{success}</p>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <p className="text-sm text-green-600">
+                    Congratulations! Your organizer profile has been created
+                    successfully!
+                  </p>
+                </div>
               </div>
             )}
 
@@ -244,6 +263,7 @@ export default function BecomeOrganizerPage() {
                   }
                   placeholder="Your business or organization name"
                   required
+                  disabled={createOrganizerMutation.isPending}
                 />
               </div>
 
@@ -259,7 +279,8 @@ export default function BecomeOrganizerPage() {
                   }
                   placeholder="Tell people about your organization..."
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={createOrganizerMutation.isPending}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                 />
               </div>
 
@@ -276,6 +297,7 @@ export default function BecomeOrganizerPage() {
                   }
                   placeholder="contact@yourcompany.com"
                   required
+                  disabled={createOrganizerMutation.isPending}
                 />
               </div>
 
@@ -289,6 +311,7 @@ export default function BecomeOrganizerPage() {
                   value={profile.website}
                   onChange={(e) => handleInputChange("website", e.target.value)}
                   placeholder="https://yourwebsite.com"
+                  disabled={createOrganizerMutation.isPending}
                 />
               </div>
 
@@ -304,6 +327,7 @@ export default function BecomeOrganizerPage() {
                     handleInputChange("logo_url", e.target.value)
                   }
                   placeholder="https://example.com/logo.png"
+                  disabled={createOrganizerMutation.isPending}
                 />
               </div>
 
@@ -319,17 +343,30 @@ export default function BecomeOrganizerPage() {
                     handleInputChange("location", e.target.value)
                   }
                   placeholder="City, Country"
+                  disabled={createOrganizerMutation.isPending}
                 />
               </div>
 
               <div className="flex gap-4">
-                <Button type="submit" disabled={saving} className="flex-1">
-                  {saving ? "Creating Profile..." : "Become an Organizer"}
+                <Button
+                  type="submit"
+                  disabled={createOrganizerMutation.isPending}
+                  className="flex-1"
+                >
+                  {createOrganizerMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating Profile...
+                    </>
+                  ) : (
+                    "Become an Organizer"
+                  )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => router.push("/")}
+                  disabled={createOrganizerMutation.isPending}
                 >
                   Cancel
                 </Button>

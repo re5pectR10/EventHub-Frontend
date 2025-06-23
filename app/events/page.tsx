@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useEvents, useCategories } from "@/lib/api";
 import { Search, Filter, SlidersHorizontal, Grid, List } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
 import { EventCard } from "@/components/events/event-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiService } from "@/lib/api";
 import Link from "next/link";
-import type { Event, Category, EventSearchParams } from "@/lib/types";
+import type { EventSearchParams } from "@/lib/types";
 
 interface FilterState {
   query: string;
@@ -25,14 +25,9 @@ export default function EventsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [events, setEvents] = useState<Event[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   const [filters, setFilters] = useState<FilterState>({
     query: searchParams.get("q") || "",
@@ -43,57 +38,34 @@ export default function EventsPage() {
     sort: (searchParams.get("sort") as FilterState["sort"]) || "date_asc",
   });
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Build search params for React Query
+  const eventSearchParams: EventSearchParams = {
+    page: currentPage,
+    limit: 12,
+    ...(filters.query && { query: filters.query }),
+    ...(filters.category && { category: filters.category }),
+    ...(filters.dateFrom && { date_from: filters.dateFrom }),
+    ...(filters.dateTo && { date_to: filters.dateTo }),
+    ...(filters.location && { location: filters.location }),
+    sort: filters.sort,
+  };
 
-    const searchParamsObj: EventSearchParams = {
-      page: currentPage,
-      limit: 12,
-      ...(filters.query && { query: filters.query }),
-      ...(filters.category && { category: filters.category }),
-      ...(filters.dateFrom && { date_from: filters.dateFrom }),
-      ...(filters.dateTo && { date_to: filters.dateTo }),
-      ...(filters.location && { location: filters.location }),
-      sort: filters.sort,
-    };
+  // React Query hooks
+  const {
+    data: eventsData,
+    isLoading: loading,
+    error: eventsError,
+  } = useEvents(eventSearchParams);
 
-    try {
-      const response = await apiService.getEvents(searchParamsObj);
+  const {
+    data: categories = [],
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useCategories();
 
-      if (response.error) {
-        setError(response.error);
-      } else {
-        setEvents(response.events || []);
-        if (response.pagination) {
-          setTotalPages(response.pagination.pages);
-        }
-      }
-    } catch (err) {
-      setError("Failed to fetch events");
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, currentPage]);
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const response = await apiService.getCategories();
-      if (response.categories) {
-        setCategories(response.categories);
-      }
-    } catch (err) {
-      console.error("Failed to fetch categories:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+  const events = eventsData?.events || [];
+  const totalPages = eventsData?.pagination?.pages || 1;
+  const error = eventsError?.message || categoriesError?.message || null;
 
   const updateURL = useCallback(() => {
     const params = new URLSearchParams();
@@ -248,6 +220,7 @@ export default function EventsPage() {
                           handleFilterChange("category", e.target.value)
                         }
                         className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background"
+                        disabled={categoriesLoading}
                       >
                         <option value="">All categories</option>
                         {categories.map((category) => (
@@ -314,7 +287,9 @@ export default function EventsPage() {
           {error && (
             <div className="text-center py-12">
               <p className="text-red-600 mb-4">{error}</p>
-              <Button onClick={fetchEvents}>Try again</Button>
+              <Button onClick={() => window.location.reload()}>
+                Try again
+              </Button>
             </div>
           )}
 
