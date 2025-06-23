@@ -21,24 +21,28 @@ import {
   TicketIcon,
 } from "lucide-react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
-import { useOrganizerEvents, apiService } from "@/lib/api";
+import {
+  useOrganizerEvents,
+  useDeleteEvent,
+  useUpdateEventStatus,
+} from "@/lib/api";
 import type { Event } from "@/lib/types";
 
 export default function EventsManagementPage() {
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = createClient();
   const router = useRouter();
 
-  // Use React Query hook for events data
+  // Use React Query hooks
   const {
     data: events = [],
     isLoading: loading,
     error: queryError,
-    refetch,
   } = useOrganizerEvents();
+
+  const deleteEventMutation = useDeleteEvent();
+  const updateEventStatusMutation = useUpdateEventStatus();
 
   // Set error from query if exists
   if (queryError && !error) {
@@ -54,18 +58,10 @@ export default function EventsManagementPage() {
       return;
     }
 
-    setDeleting(eventId);
     setError(null);
 
     try {
-      const response = await apiService.deleteEvent(eventId);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      // Refetch events after deletion
-      await refetch();
+      await deleteEventMutation.mutateAsync(eventId);
     } catch (error) {
       console.error("Error deleting event:", error);
       setError(
@@ -73,8 +69,6 @@ export default function EventsManagementPage() {
           ? error.message
           : "Failed to delete event. Please try again."
       );
-    } finally {
-      setDeleting(null);
     }
   };
 
@@ -82,18 +76,13 @@ export default function EventsManagementPage() {
     eventId: string,
     newStatus: "draft" | "published" | "cancelled"
   ) => {
-    setUpdatingStatus(eventId);
     setError(null);
 
     try {
-      const response = await apiService.updateEventStatus(eventId, newStatus);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      // Refetch events after status update
-      await refetch();
+      await updateEventStatusMutation.mutateAsync({
+        id: eventId,
+        status: newStatus,
+      });
     } catch (error) {
       console.error("Error updating event status:", error);
       setError(
@@ -101,8 +90,6 @@ export default function EventsManagementPage() {
           ? error.message
           : "Failed to update event status. Please try again."
       );
-    } finally {
-      setUpdatingStatus(null);
     }
   };
 
@@ -198,174 +185,95 @@ export default function EventsManagementPage() {
                           </Badge>
                         )}
                       </div>
-                      <CardDescription className="line-clamp-2">
-                        {event.description}
+                      <CardDescription className="text-sm text-gray-600">
+                        {new Date(event.start_date).toLocaleDateString()} at{" "}
+                        {event.start_time} • {event.location_name}
                       </CardDescription>
                     </div>
-                    <div className="flex gap-2 ml-4">
+                    <div className="flex gap-2">
                       <Link href={`/events/${event.slug}`}>
-                        <Button variant="outline" size="sm" title="View Event">
-                          <EyeIcon className="h-4 w-4" />
+                        <Button variant="outline" size="sm">
+                          <EyeIcon className="h-4 w-4 mr-1" />
+                          View
                         </Button>
                       </Link>
                       <Link href={`/dashboard/events/${event.id}/edit`}>
-                        <Button variant="outline" size="sm" title="Edit Event">
-                          <EditIcon className="h-4 w-4" />
+                        <Button variant="outline" size="sm">
+                          <EditIcon className="h-4 w-4 mr-1" />
+                          Edit
                         </Button>
                       </Link>
                       <Link href={`/dashboard/events/${event.id}/tickets`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          title="Manage Tickets"
-                        >
-                          <TicketIcon className="h-4 w-4" />
+                        <Button variant="outline" size="sm">
+                          <TicketIcon className="h-4 w-4 mr-1" />
+                          Tickets
                         </Button>
                       </Link>
                       <Button
-                        variant="outline"
+                        variant="destructive"
                         size="sm"
                         onClick={() => handleDeleteEvent(event.id)}
-                        disabled={deleting === event.id}
-                        className="text-red-600 hover:text-red-700"
-                        title="Delete Event"
+                        disabled={deleteEventMutation.isPending}
                       >
-                        <TrashIcon className="h-4 w-4" />
+                        <TrashIcon className="h-4 w-4 mr-1" />
+                        Delete
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
+
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Date & Time
+                      <h4 className="font-medium text-gray-900 mb-2">
+                        Ticket Sales
+                      </h4>
+                      <p className="text-2xl font-bold text-green-600">
+                        {getTotalSold(event.ticket_types || [])}
                       </p>
-                      <p className="text-sm text-gray-900">
-                        {new Date(event.start_date).toLocaleDateString()}
-                      </p>
+                      <p className="text-sm text-gray-500">tickets sold</p>
                     </div>
+
                     <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Location
-                      </p>
-                      <p className="text-sm text-gray-900">
-                        {event.location_name}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Tickets Sold
-                      </p>
-                      <p className="text-sm text-gray-900">
-                        {getTotalSold(event.ticket_types)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
+                      <h4 className="font-medium text-gray-900 mb-2">
                         Revenue
+                      </h4>
+                      <p className="text-2xl font-bold text-blue-600">
+                        ${getTotalRevenue(event.ticket_types || []).toFixed(2)}
                       </p>
-                      <p className="text-sm text-gray-900">
-                        ${getTotalRevenue(event.ticket_types).toFixed(2)}
-                      </p>
+                      <p className="text-sm text-gray-500">total revenue</p>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Status</h4>
+                      <select
+                        value={event.status}
+                        onChange={(e) =>
+                          handleStatusChange(
+                            event.id,
+                            e.target.value as
+                              | "draft"
+                              | "published"
+                              | "cancelled"
+                          )
+                        }
+                        disabled={updateEventStatusMutation.isPending}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
                     </div>
                   </div>
 
-                  {event.ticket_types.length > 0 ? (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-sm font-medium text-gray-500">
-                          Ticket Types
-                        </p>
-                        <Link href={`/dashboard/events/${event.id}/tickets`}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            Manage Tickets
-                          </Button>
-                        </Link>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {event.ticket_types.map((ticket) => (
-                          <Badge key={ticket.id} variant="outline">
-                            {ticket.name}: ${ticket.price} (
-                            {ticket.quantity_sold}/{ticket.quantity_available})
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-medium text-gray-500">
-                          No ticket types yet
-                        </p>
-                        <Link href={`/dashboard/events/${event.id}/tickets`}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            Create Tickets
-                          </Button>
-                        </Link>
-                      </div>
+                  {event.description && (
+                    <div className="mt-4">
+                      <p className="text-gray-600 line-clamp-2">
+                        {event.description}
+                      </p>
                     </div>
                   )}
-
-                  {/* Status Controls */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <p className="text-sm font-medium text-gray-500 mb-2">
-                      Event Status
-                    </p>
-                    <div className="flex gap-2">
-                      {event.status !== "published" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleStatusChange(event.id, "published")
-                          }
-                          disabled={updatingStatus === event.id}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          {updatingStatus === event.id
-                            ? "Updating..."
-                            : "Publish"}
-                        </Button>
-                      )}
-                      {event.status !== "draft" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleStatusChange(event.id, "draft")}
-                          disabled={updatingStatus === event.id}
-                          className="text-gray-600 hover:text-gray-700"
-                        >
-                          {updatingStatus === event.id
-                            ? "Updating..."
-                            : "Draft"}
-                        </Button>
-                      )}
-                      {event.status !== "cancelled" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleStatusChange(event.id, "cancelled")
-                          }
-                          disabled={updatingStatus === event.id}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          {updatingStatus === event.id
-                            ? "Updating..."
-                            : "Cancel"}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
             ))}

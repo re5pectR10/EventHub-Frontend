@@ -14,9 +14,9 @@ import { Input } from "@/components/ui/input";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { apiService } from "@/lib/api";
+import { useCategories, useCreateEvent, useCreateTicket } from "@/lib/api";
 import { createClient } from "@/utils/supabase/client";
-import type { EventFormData, TicketTypeFormData, Category } from "@/lib/types";
+import type { EventFormData, TicketTypeFormData } from "@/lib/types";
 
 // Alias for local usage
 type Event = EventFormData;
@@ -38,10 +38,7 @@ export default function CreateEventPage() {
     status: "draft",
   });
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
@@ -49,6 +46,18 @@ export default function CreateEventPage() {
 
   const supabase = createClient();
   const router = useRouter();
+
+  // Use React Query hooks
+  const {
+    data: categories = [],
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useCategories();
+
+  const createEventMutation = useCreateEvent();
+  const createTicketMutation = useCreateTicket();
+
+  const error = categoriesError?.message || null;
 
   useEffect(() => {
     async function init() {
@@ -60,10 +69,6 @@ export default function CreateEventPage() {
           router.push("/auth/signin");
           return;
         }
-
-        // Fetch categories
-        const response = await apiService.getCategories();
-        setCategories(response.categories || []);
       } catch (error) {
         console.error("Error initializing:", error);
       } finally {
@@ -172,7 +177,6 @@ export default function CreateEventPage() {
     e.preventDefault();
 
     // Clear previous errors
-    setError(null);
     setSuccess(null);
     setValidationErrors({});
 
@@ -181,41 +185,38 @@ export default function CreateEventPage() {
       return;
     }
 
-    setSaving(true);
-
     try {
-      const response = await apiService.createEvent(event);
+      const response = await createEventMutation.mutateAsync(event);
 
       if (response.error) {
         throw new Error(response.error);
       }
 
-      if (response.data) {
+      if (response.data || response.event) {
+        const eventData = response.data || response.event;
+
         // Create ticket types if any
-        if (ticketTypes.length > 0) {
+        if (ticketTypes.length > 0 && eventData?.id) {
           for (const ticket of ticketTypes) {
             const ticketData = {
               ...ticket,
-              event_id: response.data.id,
+              event_id: eventData.id,
             };
-            await apiService.createTicketType(ticketData);
+
+            await createTicketMutation.mutateAsync(ticketData);
           }
         }
 
-        setSuccess("Event created successfully! Redirecting...");
+        setSuccess("Event created successfully!");
+
+        // Redirect to events page after a short delay
         setTimeout(() => {
-          router.push(`/dashboard/events/${response.data!.id}`);
-        }, 1500);
+          router.push("/dashboard/events");
+        }, 1000);
       }
     } catch (error) {
       console.error("Error creating event:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to create event. Please try again."
-      );
-    } finally {
-      setSaving(false);
+      // Error is handled by the mutation itself
     }
   };
 
@@ -226,7 +227,7 @@ export default function CreateEventPage() {
     setEvent((prev) => ({ ...prev, [field]: value }));
   };
 
-  if (loading) {
+  if (loading || categoriesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -237,46 +238,42 @@ export default function CreateEventPage() {
     );
   }
 
+  const isSubmitting =
+    createEventMutation.isPending || createTicketMutation.isPending;
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Button variant="ghost" size="sm" asChild>
-              <Link
-                href="/dashboard/events"
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Events
-              </Link>
-            </Button>
-          </div>
+          <Link
+            href="/dashboard/events"
+            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Events
+          </Link>
           <h1 className="text-3xl font-bold text-gray-900">Create New Event</h1>
           <p className="mt-2 text-gray-600">
-            Fill in the details below to create your event.
+            Fill in the details below to create your event
           </p>
         </div>
 
-        {/* Dashboard Navigation */}
         <DashboardNav />
 
-        <Card>
+        <Card className="mt-8">
           <CardHeader>
-            <CardTitle>Create New Event</CardTitle>
+            <CardTitle>Event Details</CardTitle>
             <CardDescription>
-              Fill in the details below to create your event.
+              Provide the basic information about your event.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Error Message */}
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
 
-            {/* Success Message */}
             {success && (
               <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
                 <p className="text-sm text-green-600">{success}</p>
@@ -469,15 +466,19 @@ export default function CreateEventPage() {
 
                 <div className="space-y-2">
                   <label htmlFor="capacity" className="text-sm font-medium">
-                    Max Capacity
+                    Capacity
                   </label>
                   <Input
                     id="capacity"
                     type="number"
                     value={event.capacity}
                     onChange={(e) =>
-                      handleInputChange("capacity", parseInt(e.target.value))
+                      handleInputChange(
+                        "capacity",
+                        parseInt(e.target.value) || 0
+                      )
                     }
+                    placeholder="Maximum attendees"
                     min="1"
                   />
                 </div>
@@ -497,7 +498,7 @@ export default function CreateEventPage() {
                   onChange={(e) =>
                     handleInputChange("location_address", e.target.value)
                   }
-                  placeholder="Enter full venue address"
+                  placeholder="Enter venue address"
                   required
                   className={
                     validationErrors.location_address ? "border-red-500" : ""
@@ -510,29 +511,28 @@ export default function CreateEventPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center space-x-2">
                 <input
-                  type="checkbox"
                   id="featured"
+                  type="checkbox"
                   checked={event.featured}
                   onChange={(e) =>
                     handleInputChange("featured", e.target.checked)
                   }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="featured" className="text-sm font-medium">
-                  Feature this event
+                  Featured Event
                 </label>
               </div>
 
               {/* Ticket Types Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="border-t pt-6">
+                <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-medium">Ticket Types</h3>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
                     onClick={addTicketType}
                     className="flex items-center gap-2"
                   >
@@ -541,207 +541,175 @@ export default function CreateEventPage() {
                   </Button>
                 </div>
 
-                {ticketTypes.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>
-                      No ticket types added yet. Click "Add Ticket Type" to
-                      create your first ticket.
-                    </p>
+                {ticketTypes.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">
+                    No ticket types added yet. Add ticket types to enable
+                    bookings.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {ticketTypes.map((ticket, index) => (
+                      <Card key={index}>
+                        <CardContent className="pt-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <h4 className="font-medium">
+                              Ticket Type {index + 1}
+                            </h4>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeTicketType(index)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Ticket Name *
+                              </label>
+                              <Input
+                                type="text"
+                                value={ticket.name}
+                                onChange={(e) =>
+                                  updateTicketType(
+                                    index,
+                                    "name",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="e.g., General Admission"
+                                required
+                                className={
+                                  validationErrors[`ticket_${index}_name`]
+                                    ? "border-red-500"
+                                    : ""
+                                }
+                              />
+                              {validationErrors[`ticket_${index}_name`] && (
+                                <p className="text-sm text-red-600">
+                                  {validationErrors[`ticket_${index}_name`]}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Price ($) *
+                              </label>
+                              <Input
+                                type="number"
+                                value={ticket.price}
+                                onChange={(e) =>
+                                  updateTicketType(
+                                    index,
+                                    "price",
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                placeholder="0.00"
+                                min="0"
+                                step="0.01"
+                                required
+                                className={
+                                  validationErrors[`ticket_${index}_price`]
+                                    ? "border-red-500"
+                                    : ""
+                                }
+                              />
+                              {validationErrors[`ticket_${index}_price`] && (
+                                <p className="text-sm text-red-600">
+                                  {validationErrors[`ticket_${index}_price`]}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Quantity Available *
+                              </label>
+                              <Input
+                                type="number"
+                                value={ticket.quantity_available}
+                                onChange={(e) =>
+                                  updateTicketType(
+                                    index,
+                                    "quantity_available",
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                placeholder="100"
+                                min="1"
+                                required
+                                className={
+                                  validationErrors[`ticket_${index}_quantity`]
+                                    ? "border-red-500"
+                                    : ""
+                                }
+                              />
+                              {validationErrors[`ticket_${index}_quantity`] && (
+                                <p className="text-sm text-red-600">
+                                  {validationErrors[`ticket_${index}_quantity`]}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Max Per Order
+                              </label>
+                              <Input
+                                type="number"
+                                value={ticket.max_per_order}
+                                onChange={(e) =>
+                                  updateTicketType(
+                                    index,
+                                    "max_per_order",
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                placeholder="10"
+                                min="1"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            <label className="text-sm font-medium">
+                              Description
+                            </label>
+                            <textarea
+                              value={ticket.description}
+                              onChange={(e) =>
+                                updateTicketType(
+                                  index,
+                                  "description",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Describe this ticket type..."
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
-
-                {ticketTypes.map((ticket, index) => (
-                  <Card key={index} className="p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium">Ticket Type {index + 1}</h4>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTicketType(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Name *</label>
-                        <Input
-                          value={ticket.name}
-                          onChange={(e) =>
-                            updateTicketType(index, "name", e.target.value)
-                          }
-                          placeholder="e.g., General Admission"
-                          className={
-                            validationErrors[`ticket_${index}_name`]
-                              ? "border-red-500"
-                              : ""
-                          }
-                        />
-                        {validationErrors[`ticket_${index}_name`] && (
-                          <p className="text-sm text-red-600">
-                            {validationErrors[`ticket_${index}_name`]}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Price ($) *
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={ticket.price}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "price",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          placeholder="0.00"
-                          className={
-                            validationErrors[`ticket_${index}_price`]
-                              ? "border-red-500"
-                              : ""
-                          }
-                        />
-                        {validationErrors[`ticket_${index}_price`] && (
-                          <p className="text-sm text-red-600">
-                            {validationErrors[`ticket_${index}_price`]}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Quantity Available *
-                        </label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={ticket.quantity_available}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "quantity_available",
-                              parseInt(e.target.value) || 1
-                            )
-                          }
-                          className={
-                            validationErrors[`ticket_${index}_quantity`]
-                              ? "border-red-500"
-                              : ""
-                          }
-                        />
-                        {validationErrors[`ticket_${index}_quantity`] && (
-                          <p className="text-sm text-red-600">
-                            {validationErrors[`ticket_${index}_quantity`]}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Max Per Order
-                        </label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={ticket.max_per_order}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "max_per_order",
-                              parseInt(e.target.value) || 1
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Sale Start Date
-                        </label>
-                        <Input
-                          type="datetime-local"
-                          value={ticket.sale_start_date}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "sale_start_date",
-                              e.target.value
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Sale End Date
-                        </label>
-                        <Input
-                          type="datetime-local"
-                          value={ticket.sale_end_date}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "sale_end_date",
-                              e.target.value
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm font-medium">
-                          Description
-                        </label>
-                        <textarea
-                          value={ticket.description}
-                          onChange={(e) =>
-                            updateTicketType(
-                              index,
-                              "description",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Describe what this ticket includes..."
-                          rows={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
               </div>
 
-              <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={saving}
-                  onClick={() => handleInputChange("status", "draft")}
-                  variant="outline"
-                >
-                  {saving ? "Saving..." : "Save as Draft"}
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={saving}
-                  onClick={() => handleInputChange("status", "published")}
-                >
-                  {saving ? "Publishing..." : "Publish Event"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push("/dashboard")}
-                >
-                  Cancel
+              <div className="flex justify-end space-x-4 pt-6">
+                <Link href="/dashboard/events">
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </Link>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Creating..." : "Create Event"}
                 </Button>
               </div>
             </form>

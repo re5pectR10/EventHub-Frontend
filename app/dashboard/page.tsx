@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiService } from "@/lib/api";
+import { useDashboardStats } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,21 +16,19 @@ import {
 import { CalendarIcon, UsersIcon, TicketIcon, PlusIcon } from "lucide-react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 
-interface DashboardStats {
-  eventsCount: number;
-  totalBookings: number;
-  totalRevenue: number;
-  upcomingEvents: any[];
-  recentBookings: any[];
-}
-
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+
+  // Use React Query hook for dashboard data
+  const {
+    data: stats,
+    isLoading: loading,
+    error: queryError,
+  } = useDashboardStats();
+
+  const error = queryError?.message || null;
 
   useEffect(() => {
     async function getUser() {
@@ -42,58 +40,9 @@ export default function DashboardPage() {
         return;
       }
       setUser(user);
-      await fetchDashboardData(user);
     }
     getUser();
   }, []);
-
-  async function fetchDashboardData(user: any) {
-    try {
-      // Fetch organizer's events using API service
-      const eventsResponse = await apiService.getOrganizerEvents();
-
-      // Fetch bookings for organizer's events using API service
-      const bookingsResponse = await apiService.getBookings();
-
-      if (eventsResponse.error || bookingsResponse.error) {
-        setError(
-          eventsResponse.error ||
-            bookingsResponse.error ||
-            "Failed to load dashboard data"
-        );
-        return;
-      }
-
-      const events = eventsResponse.events || [];
-      const bookings = bookingsResponse.bookings || [];
-
-      // Calculate stats
-      const upcomingEvents = events.filter(
-        (event: any) => new Date(event.start_date) > new Date()
-      );
-      const totalRevenue = bookings.reduce(
-        (sum: number, booking: any) => sum + booking.total_price,
-        0
-      );
-
-      setStats({
-        eventsCount: events.length,
-        totalBookings: bookings.length,
-        totalRevenue,
-        upcomingEvents: upcomingEvents.slice(0, 5),
-        recentBookings: bookings.slice(0, 5),
-      });
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load dashboard data. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -247,7 +196,8 @@ export default function DashboardPage() {
                       <div>
                         <h4 className="font-medium">{booking.customer_name}</h4>
                         <p className="text-sm text-gray-500">
-                          ${booking.total_price.toFixed(2)} - {booking.status}
+                          ${(booking.total_price || 0).toFixed(2)} -{" "}
+                          {booking.status}
                         </p>
                       </div>
                       <Link href={`/dashboard/bookings/${booking.id}`}>

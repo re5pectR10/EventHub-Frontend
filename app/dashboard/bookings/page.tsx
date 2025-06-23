@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useUserBookings } from "@/lib/api";
+import { useOrganizerBookings } from "@/lib/api";
 import Link from "next/link";
 import { Calendar, Users, CreditCard, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ export default function BookingsPage() {
     data: bookings = [],
     isLoading: loading,
     error: queryError,
-  } = useUserBookings();
+  } = useOrganizerBookings();
 
   // Set error from query if exists
   if (queryError && !error) {

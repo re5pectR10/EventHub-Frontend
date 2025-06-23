@@ -37,12 +37,30 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Define public routes that don't require authentication
+  const publicRoutes = ["/", "/events", "/categories", "/organizers", "/auth"];
+
+  // Check if current path is a public route
+  const isPublicRoute = publicRoutes.some((route) => {
+    if (route === "/") {
+      return request.nextUrl.pathname === "/";
+    }
+    return request.nextUrl.pathname.startsWith(route);
+  });
+
+  // Check for dynamic routes like /events/[slug] and /organizers/[id]
+  const isDynamicEventRoute = /^\/events\/[^\/]+$/.test(
+    request.nextUrl.pathname
+  );
+  const isDynamicOrganizerRoute = /^\/organizers\/[^\/]+$/.test(
+    request.nextUrl.pathname
+  );
+
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    request.nextUrl.pathname !== "/" &&
-    request.nextUrl.pathname !== "/events" &&
-    request.nextUrl.pathname !== "/categories"
+    !isPublicRoute &&
+    !isDynamicEventRoute &&
+    !isDynamicOrganizerRoute
   ) {
     // no user, potentially respond by redirecting the user to the auth page
     const url = request.nextUrl.clone();

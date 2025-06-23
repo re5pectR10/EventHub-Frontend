@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -19,47 +19,21 @@ import {
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiService } from "@/lib/api";
-import type { Event } from "@/lib/types";
+import { useEventBySlug } from "@/lib/api";
 
 export default function EventDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = params.slug as string;
-
-  const [event, setEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
 
-  useEffect(() => {
-    const fetchEvent = async () => {
-      if (!slug) return;
+  // Use React Query hook
+  const {
+    data: event,
+    isLoading: loading,
+    error: queryError,
+  } = useEventBySlug(slug);
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await apiService.getEventBySlug(slug);
-
-        if (response.error) {
-          setError(response.error);
-        } else if (response.data) {
-          setEvent(response.data);
-        } else if (response.event) {
-          setEvent(response.event);
-        } else {
-          setError("No event data received");
-        }
-      } catch (err) {
-        setError("Failed to fetch event details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvent();
-  }, [slug]);
+  const error = queryError?.message || null;
 
   if (loading) {
     return (
@@ -199,240 +173,203 @@ export default function EventDetailPage() {
         <div className="container-clean py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
-              {/* Event Header */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary">
-                    <Tag className="w-3 h-3 mr-1" />
-                    {event.event_categories?.name || "General"}
-                  </span>
-                  <span className="text-sm text-gray-500">•</span>
-                  <span className="text-sm font-medium text-green-600">
-                    {priceDisplay()}
-                  </span>
-                </div>
-
-                <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+            <div className="lg:col-span-2">
+              <div className="mb-6">
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
                   {event.title}
                 </h1>
 
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                {/* Event Meta */}
+                <div className="flex flex-wrap items-center gap-4 text-gray-600 mb-6">
                   <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2" />
+                    <Calendar className="w-5 h-5 mr-2" />
                     <span>{formatDate(startDate)}</span>
                   </div>
                   <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2" />
-                    <span>
-                      {formatTime(startDate)} - {formatTime(endDate)}
-                    </span>
+                    <Clock className="w-5 h-5 mr-2" />
+                    <span>{formatTime(startDate)}</span>
                   </div>
                   <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2" />
+                    <MapPin className="w-5 h-5 mr-2" />
                     <span>{event.location_name}</span>
                   </div>
-                  <div className="flex items-center">
-                    <Users className="w-4 h-4 mr-2" />
-                    <span>By {event.organizers?.business_name}</span>
-                  </div>
+                  {event.event_categories && (
+                    <div className="flex items-center">
+                      <Tag className="w-5 h-5 mr-2" />
+                      <span>{event.event_categories.name}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div className="mb-6">
+                  <span className="text-2xl font-bold text-green-600">
+                    {priceDisplay()}
+                  </span>
                 </div>
               </div>
 
-              {/* Image Gallery */}
+              {/* Description */}
+              {event.description && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold mb-4">About This Event</h2>
+                  <div className="prose max-w-none">
+                    <p className="text-gray-700 leading-relaxed">
+                      {event.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional Images */}
               {images.length > 1 && (
-                <div>
-                  <h2 className="text-xl font-semibold mb-4">Event Photos</h2>
-                  <div className="grid grid-cols-4 gap-2">
-                    {images.slice(0, 8).map((image, index) => (
-                      <button
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold mb-4">Gallery</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {images.slice(1).map((image, index) => (
+                      <div
                         key={index}
-                        onClick={() => setSelectedImage(index)}
-                        className={`relative aspect-square rounded-lg overflow-hidden ${
-                          selectedImage === index ? "ring-2 ring-primary" : ""
-                        }`}
+                        className="relative h-48 rounded-lg overflow-hidden cursor-pointer hover:opacity-75 transition-opacity"
+                        onClick={() => setSelectedImage(index + 1)}
                       >
                         <Image
                           src={image.image_url}
-                          alt={image.alt_text || `Event photo ${index + 1}`}
+                          alt={image.alt_text || `Event image ${index + 2}`}
                           fill
-                          className="object-cover hover:scale-105 transition-transform"
+                          className="object-cover"
                         />
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Description */}
-              <div>
-                <h2 className="text-xl font-semibold mb-4">About This Event</h2>
-                <div className="prose max-w-none">
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                    {event.description}
+              {/* Location */}
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-4">Location</h2>
+                <div className="bg-gray-50 p-6 rounded-lg">
+                  <h3 className="font-semibold text-lg mb-2">
+                    {event.location_name}
+                  </h3>
+                  <p className="text-gray-600 flex items-start">
+                    <MapPin className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+                    {event.location_address}
                   </p>
                 </div>
               </div>
-
-              {/* Location Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <MapPin className="w-5 h-5 mr-2" />
-                    Location
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <p className="font-medium">{event.location_name}</p>
-                    <p className="text-gray-600">{event.location_address}</p>
-                    {/* You could add a map component here */}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Organizer Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Users className="w-5 h-5 mr-2" />
-                    Event Organizer
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <h3 className="font-medium text-lg">
-                      {event.organizers?.business_name}
-                    </h3>
-                    {event.organizers?.description && (
-                      <p className="text-gray-600">
-                        {event.organizers.description}
-                      </p>
-                    )}
-                    <div className="flex gap-4">
-                      {event.organizers?.contact_email && (
-                        <a
-                          href={`mailto:${event.organizers.contact_email}`}
-                          className="inline-flex items-center text-sm text-primary hover:underline"
-                        >
-                          <Mail className="w-4 h-4 mr-1" />
-                          Contact
-                        </a>
-                      )}
-                      {event.organizers?.website && (
-                        <a
-                          href={event.organizers.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center text-sm text-primary hover:underline"
-                        >
-                          <Globe className="w-4 h-4 mr-1" />
-                          Website
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Ticket Types */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tickets</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {event.ticket_types?.map((ticket) => (
-                    <div key={ticket.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium">{ticket.name}</h4>
-                        <span className="font-semibold text-lg">
-                          {ticket.price === 0 ? "Free" : `$${ticket.price}`}
-                        </span>
+            <div className="lg:col-span-1">
+              <div className="sticky top-8">
+                {/* Booking Card */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>Get Your Tickets</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {event.ticket_types && event.ticket_types.length > 0 ? (
+                      <div className="space-y-4">
+                        {event.ticket_types.map((ticket) => (
+                          <div
+                            key={ticket.id}
+                            className="flex justify-between items-center p-3 border rounded-lg"
+                          >
+                            <div>
+                              <h4 className="font-medium">{ticket.name}</h4>
+                              <p className="text-sm text-gray-600">
+                                {ticket.description}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {ticket.quantity_available -
+                                  ticket.quantity_sold}{" "}
+                                available
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold">
+                                ${ticket.price.toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                        <Link href={`/events/${event.slug}/book`}>
+                          <Button className="w-full" size="lg">
+                            Book Now
+                          </Button>
+                        </Link>
                       </div>
-                      {ticket.description && (
-                        <p className="text-sm text-gray-600 mb-3">
-                          {ticket.description}
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-gray-600 mb-4">
+                          Tickets are not available for this event yet.
                         </p>
-                      )}
-                      <div className="flex justify-between items-center text-sm text-gray-500 mb-3">
-                        <span>
-                          Available:{" "}
-                          {ticket.quantity_available - ticket.quantity_sold}
-                        </span>
-                        <span>Sold: {ticket.quantity_sold}</span>
+                        <Button disabled size="lg" className="w-full">
+                          Coming Soon
+                        </Button>
                       </div>
-                      <Button
-                        className="w-full"
-                        disabled={
-                          ticket.quantity_available <= ticket.quantity_sold
-                        }
-                        onClick={() =>
-                          router.push(`/events/${params.slug}/book`)
-                        }
-                      >
-                        {ticket.quantity_available <= ticket.quantity_sold
-                          ? "Sold Out"
-                          : "Select"}
-                      </Button>
-                    </div>
-                  ))}
+                    )}
+                  </CardContent>
+                </Card>
 
-                  {event.ticket_types?.length === 0 && (
-                    <div className="text-center py-4">
-                      <p className="text-gray-600 mb-4">This is a free event</p>
-                      <Button
-                        className="w-full"
-                        onClick={() =>
-                          router.push(`/events/${params.slug}/book`)
-                        }
-                      >
-                        Register for Free
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Event Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Event Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Start Date</span>
-                    <span className="font-medium">{formatDate(startDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Start Time</span>
-                    <span className="font-medium">{formatTime(startDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">End Time</span>
-                    <span className="font-medium">{formatTime(endDate)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Category</span>
-                    <span className="font-medium">
-                      {event.event_categories?.name || "General"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Status</span>
-                    <span className="font-medium capitalize">
-                      {event.status}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Organizer Info */}
+                {event.organizers && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Organized by</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 rounded-full bg-gray-200 mr-3 flex items-center justify-center">
+                          <Users className="w-6 h-6 text-gray-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold">
+                            {event.organizers.business_name}
+                          </h4>
+                          {event.organizers.description && (
+                            <p className="text-sm text-gray-600">
+                              {event.organizers.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Link href={`/organizers/${event.organizers.id}`}>
+                          <Button variant="outline" size="sm">
+                            <Users className="w-4 h-4 mr-1" />
+                            View Profile
+                          </Button>
+                        </Link>
+                        {event.organizers.website && (
+                          <a
+                            href={event.organizers.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button variant="outline" size="sm">
+                              <Globe className="w-4 h-4 mr-1" />
+                              Website
+                            </Button>
+                          </a>
+                        )}
+                        {event.organizers.contact_email && (
+                          <a href={`mailto:${event.organizers.contact_email}`}>
+                            <Button variant="outline" size="sm">
+                              <Mail className="w-4 h-4 mr-1" />
+                              Contact
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );

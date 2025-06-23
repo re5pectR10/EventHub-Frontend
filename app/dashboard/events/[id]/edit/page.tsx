@@ -12,8 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiService } from "@/lib/api";
-import type { Category, EventFormData } from "@/lib/types";
+import { useCategories, useEventById, useUpdateEvent } from "@/lib/api";
+import type { EventFormData } from "@/lib/types";
 
 export default function EditEventPage() {
   const [formData, setFormData] = useState<EventFormData>({
@@ -30,15 +30,34 @@ export default function EditEventPage() {
     featured: false,
     status: "draft",
   });
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = createClient();
   const router = useRouter();
   const params = useParams();
   const eventId = params.id as string;
+
+  // Use React Query hooks
+  const {
+    data: categories = [],
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useCategories();
+
+  const {
+    data: eventData,
+    isLoading: eventLoading,
+    error: eventError,
+  } = useEventById(eventId);
+
+  const updateEventMutation = useUpdateEvent();
+
+  // Set error from query if exists
+  const queryError = categoriesError?.message || eventError?.message || null;
+  if (queryError && !error) {
+    setError(queryError);
+  }
 
   useEffect(() => {
     async function init() {
@@ -50,41 +69,10 @@ export default function EditEventPage() {
           router.push("/auth/signin");
           return;
         }
-
-        // Fetch event details using apiService
-        const eventResponse = await apiService.getOrganizerEvent(eventId);
-        if (eventResponse.error) {
-          throw new Error(eventResponse.error);
-        }
-
-        const eventData = eventResponse.data || eventResponse.event;
-        if (eventData) {
-          // Map API response to form data
-          setFormData({
-            title: eventData.title || "",
-            description: eventData.description || "",
-            start_date: eventData.start_date || "",
-            start_time: eventData.start_time || "",
-            end_date: eventData.end_date || "",
-            end_time: eventData.end_time || "",
-            location_name: eventData.location_name || "",
-            location_address: eventData.location_address || "",
-            category_id: (eventData as any).category_id || "",
-            capacity: (eventData as any).capacity || 0,
-            featured: eventData.featured || false,
-            status: eventData.status || "draft",
-          });
-        }
-
-        // Fetch categories using apiService
-        const categoriesResponse = await apiService.getCategories();
-        if (categoriesResponse.categories) {
-          setCategories(categoriesResponse.categories);
-        }
       } catch (error) {
         console.error("Error initializing:", error);
         setError(
-          error instanceof Error ? error.message : "Failed to load event"
+          error instanceof Error ? error.message : "Failed to initialize"
         );
       } finally {
         setLoading(false);
@@ -92,27 +80,43 @@ export default function EditEventPage() {
     }
 
     init();
-  }, [eventId]);
+  }, []);
+
+  // Update form data when event data is loaded
+  useEffect(() => {
+    if (eventData) {
+      setFormData({
+        title: eventData.title || "",
+        description: eventData.description || "",
+        start_date: eventData.start_date || "",
+        start_time: eventData.start_time || "",
+        end_date: eventData.end_date || "",
+        end_time: eventData.end_time || "",
+        location_name: eventData.location_name || "",
+        location_address: eventData.location_address || "",
+        category_id: (eventData as any).category_id || "",
+        capacity: (eventData as any).capacity || 0,
+        featured: eventData.featured || false,
+        status: eventData.status || "draft",
+      });
+    }
+  }, [eventData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
     setError(null);
 
     try {
-      const response = await apiService.updateEvent(eventId, formData);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
+      await updateEventMutation.mutateAsync({
+        id: eventId,
+        eventData: formData,
+      });
       router.push("/dashboard/events");
     } catch (error) {
       console.error("Error updating event:", error);
       setError(
         error instanceof Error ? error.message : "Failed to update event"
       );
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -123,7 +127,7 @@ export default function EditEventPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  if (loading) {
+  if (loading || categoriesLoading || eventLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -206,24 +210,25 @@ export default function EditEventPage() {
                     ))}
                   </select>
                 </div>
+              </div>
 
-                <div className="md:col-span-2 space-y-2">
-                  <label htmlFor="description" className="text-sm font-medium">
-                    Description *
-                  </label>
-                  <textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) =>
-                      handleInputChange("description", e.target.value)
-                    }
-                    placeholder="Describe your event"
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+              <div className="space-y-2">
+                <label htmlFor="description" className="text-sm font-medium">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    handleInputChange("description", e.target.value)
+                  }
+                  placeholder="Describe your event..."
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label htmlFor="start_date" className="text-sm font-medium">
                     Start Date *
@@ -253,10 +258,12 @@ export default function EditEventPage() {
                     required
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label htmlFor="end_date" className="text-sm font-medium">
-                    End Date *
+                    End Date
                   </label>
                   <Input
                     id="end_date"
@@ -265,13 +272,12 @@ export default function EditEventPage() {
                     onChange={(e) =>
                       handleInputChange("end_date", e.target.value)
                     }
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
                   <label htmlFor="end_time" className="text-sm font-medium">
-                    End Time *
+                    End Time
                   </label>
                   <Input
                     id="end_time"
@@ -280,10 +286,11 @@ export default function EditEventPage() {
                     onChange={(e) =>
                       handleInputChange("end_time", e.target.value)
                     }
-                    required
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label
                     htmlFor="location_name"
@@ -305,12 +312,11 @@ export default function EditEventPage() {
 
                 <div className="space-y-2">
                   <label htmlFor="capacity" className="text-sm font-medium">
-                    Capacity *
+                    Capacity
                   </label>
                   <Input
                     id="capacity"
                     type="number"
-                    min="1"
                     value={formData.capacity}
                     onChange={(e) =>
                       handleInputChange(
@@ -318,67 +324,68 @@ export default function EditEventPage() {
                         parseInt(e.target.value) || 0
                       )
                     }
-                    placeholder="Enter capacity"
-                    required
+                    placeholder="Maximum attendees"
+                    min="1"
                   />
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <label
-                    htmlFor="location_address"
-                    className="text-sm font-medium"
-                  >
-                    Venue Address
-                  </label>
-                  <Input
-                    id="location_address"
-                    type="text"
-                    value={formData.location_address}
-                    onChange={(e) =>
-                      handleInputChange("location_address", e.target.value)
-                    }
-                    placeholder="Enter venue address"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="status" className="text-sm font-medium">
-                    Status
-                  </label>
-                  <select
-                    id="status"
-                    value={formData.status}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "status",
-                        e.target.value as "draft" | "published" | "cancelled"
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="featured"
-                    type="checkbox"
-                    checked={formData.featured}
-                    onChange={(e) =>
-                      handleInputChange("featured", e.target.checked)
-                    }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="featured" className="text-sm font-medium">
-                    Featured Event
-                  </label>
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-6">
+              <div className="space-y-2">
+                <label
+                  htmlFor="location_address"
+                  className="text-sm font-medium"
+                >
+                  Venue Address *
+                </label>
+                <Input
+                  id="location_address"
+                  type="text"
+                  value={formData.location_address}
+                  onChange={(e) =>
+                    handleInputChange("location_address", e.target.value)
+                  }
+                  placeholder="Enter venue address"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  id="featured"
+                  type="checkbox"
+                  checked={formData.featured}
+                  onChange={(e) =>
+                    handleInputChange("featured", e.target.checked)
+                  }
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="featured" className="text-sm font-medium">
+                  Featured Event
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="status" className="text-sm font-medium">
+                  Status
+                </label>
+                <select
+                  id="status"
+                  value={formData.status}
+                  onChange={(e) =>
+                    handleInputChange(
+                      "status",
+                      e.target.value as "draft" | "published" | "cancelled"
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6">
                 <Button
                   type="button"
                   variant="outline"
@@ -386,8 +393,10 @@ export default function EditEventPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Updating..." : "Update Event"}
+                <Button type="submit" disabled={updateEventMutation.isPending}>
+                  {updateEventMutation.isPending
+                    ? "Updating..."
+                    : "Update Event"}
                 </Button>
               </div>
             </form>

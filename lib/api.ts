@@ -351,7 +351,13 @@ export const apiService = new ApiService();
 export function useEvents(params: EventSearchParams = {}) {
   return useQuery({
     queryKey: QUERY_KEYS.events.list(params),
-    queryFn: () => apiService.getEvents(params),
+    queryFn: async () => {
+      const response = await apiService.getEvents(params);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response;
+    },
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnWindowFocus: false,
   });
@@ -380,9 +386,25 @@ export function useEventBySlug(slug: string) {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.event;
+      return response.event || response.data;
     },
     enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useEventById(id: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.events.detail(id),
+    queryFn: async () => {
+      const response = await apiService.getEvent(id);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.event || response.data;
+    },
+    enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
   });
@@ -409,11 +431,8 @@ export function useOrganizers() {
   return useQuery({
     queryKey: QUERY_KEYS.organizers.lists(),
     queryFn: async () => {
-      const response = await apiService.getCategories(); // No getOrganizers method exists
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      return response.data || [];
+      const organizers = await apiService.getOrganizers();
+      return organizers;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
@@ -428,7 +447,7 @@ export function useOrganizerById(id: string) {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
+      return response.data || response.organizer;
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -444,7 +463,7 @@ export function useOrganizerProfile() {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
+      return response.data || response.organizer;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnWindowFocus: false,
@@ -459,7 +478,7 @@ export function useOrganizerEvents() {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data || [];
+      return response.events || response.data || [];
     },
     staleTime: 1 * 60 * 1000, // 1 minute
     refetchOnWindowFocus: false,
@@ -471,11 +490,26 @@ export function useUserBookings() {
   return useQuery({
     queryKey: QUERY_KEYS.bookings.userBookings,
     queryFn: async () => {
+      const response = await apiService.getBookings();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.bookings || response.data || [];
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useOrganizerBookings() {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.bookings.userBookings, "organizer"],
+    queryFn: async () => {
       const response = await apiService.getOrganizerBookings();
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data || [];
+      return response.bookings || response.data || [];
     },
     staleTime: 1 * 60 * 1000, // 1 minute
     refetchOnWindowFocus: false,
@@ -490,7 +524,7 @@ export function useBookingById(id: string) {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
+      return response.booking || response.data;
     },
     enabled: !!id,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -498,7 +532,7 @@ export function useBookingById(id: string) {
   });
 }
 
-// Tickets Hooks - No getTicketsByEvent method exists, tickets come with event data
+// Tickets Hooks
 export function useTicketsByEvent(eventId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.tickets.byEvent(eventId),
@@ -507,7 +541,8 @@ export function useTicketsByEvent(eventId: string) {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data?.ticket_types || [];
+      const eventData = response.event || response.data;
+      return eventData?.ticket_types || [];
     },
     enabled: !!eventId,
     staleTime: 1 * 60 * 1000, // 1 minute
@@ -515,7 +550,164 @@ export function useTicketsByEvent(eventId: string) {
   });
 }
 
+// Stripe Hooks
+export function useStripeConnectStatus() {
+  return useQuery({
+    queryKey: ["stripe", "connect", "status"],
+    queryFn: async () => {
+      const response = await apiService.getStripeConnectStatus();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Dashboard Hooks
+export function useDashboardStats() {
+  return useQuery({
+    queryKey: ["dashboard", "stats"],
+    queryFn: async () => {
+      try {
+        // Fetch organizer's events
+        const eventsResponse = await apiService.getOrganizerEvents();
+        // Fetch bookings for organizer's events
+        const bookingsResponse = await apiService.getOrganizerBookings();
+
+        if (eventsResponse.error || bookingsResponse.error) {
+          throw new Error(
+            eventsResponse.error ||
+              bookingsResponse.error ||
+              "Failed to load dashboard data"
+          );
+        }
+
+        const events = eventsResponse.events || eventsResponse.data || [];
+        const bookings =
+          bookingsResponse.bookings || bookingsResponse.data || [];
+
+        // Calculate stats
+        const upcomingEvents = events.filter(
+          (event: any) => new Date(event.start_date) > new Date()
+        );
+        const totalRevenue = bookings.reduce(
+          (sum: number, booking: any) => sum + (booking.total_price || 0),
+          0
+        );
+
+        return {
+          eventsCount: events.length,
+          totalBookings: bookings.length,
+          totalRevenue,
+          upcomingEvents: upcomingEvents.slice(0, 5),
+          recentBookings: bookings.slice(0, 5),
+        };
+      } catch (error) {
+        throw error;
+      }
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
 // Mutations
+export function useCreateEvent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (eventData: Partial<Event>) =>
+      apiService.createEvent(eventData),
+    onSuccess: () => {
+      // Invalidate and refetch events
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.events,
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "stats"],
+      });
+    },
+  });
+}
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      eventData,
+    }: {
+      id: string;
+      eventData: Partial<Event>;
+    }) => apiService.updateEvent(id, eventData),
+    onSuccess: (data, variables) => {
+      // Invalidate specific event and lists
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.events,
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.all,
+      });
+    },
+  });
+}
+
+export function useDeleteEvent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (eventId: string) => apiService.deleteEvent(eventId),
+    onSuccess: () => {
+      // Invalidate and refetch events
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.events,
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "stats"],
+      });
+    },
+  });
+}
+
+export function useUpdateEventStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+    }: {
+      id: string;
+      status: "draft" | "published" | "cancelled";
+    }) => apiService.updateEventStatus(id, status),
+    onSuccess: (data, variables) => {
+      // Invalidate specific event and lists
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.events,
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.all,
+      });
+    },
+  });
+}
+
 export function useCreateBooking() {
   const queryClient = useQueryClient();
 
@@ -525,6 +717,29 @@ export function useCreateBooking() {
       // Invalidate and refetch bookings
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.bookings.userBookings,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "stats"],
+      });
+    },
+  });
+}
+
+export function useCancelBooking() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bookingId: string) => apiService.cancelBooking(bookingId),
+    onSuccess: (data, variables) => {
+      // Invalidate specific booking and lists
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.bookings.detail(variables),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.bookings.userBookings,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "stats"],
       });
     },
   });
@@ -540,6 +755,9 @@ export function useCreateTicket() {
       if (variables.event_id) {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.tickets.byEvent(variables.event_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.events.detail(variables.event_id),
         });
       }
     },
@@ -558,6 +776,9 @@ export function useUpdateTicket() {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.tickets.byEvent(variables.ticketData.event_id),
         });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.events.detail(variables.ticketData.event_id),
+        });
       }
     },
   });
@@ -573,6 +794,56 @@ export function useDeleteTicket() {
       // Invalidate tickets for the specific event
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.tickets.byEvent(variables.eventId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.detail(variables.eventId),
+      });
+    },
+  });
+}
+
+export function useCreateStripeConnectAccount() {
+  return useMutation({
+    mutationFn: () => apiService.createStripeConnectAccount(),
+  });
+}
+
+export function useCreateStripeCheckoutSession() {
+  return useMutation({
+    mutationFn: (data: {
+      event_id: string;
+      tickets: Array<{
+        ticket_type_id: string;
+        quantity: number;
+      }>;
+      customer_email?: string;
+    }) => apiService.createStripeCheckoutSession(data),
+  });
+}
+
+export function useCreateOrganizerProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (organizerData: Partial<Organizer>) =>
+      apiService.createOrganizerProfile(organizerData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.profile,
+      });
+    },
+  });
+}
+
+export function useUpdateOrganizerProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (organizerData: Partial<Organizer>) =>
+      apiService.updateOrganizerProfile(organizerData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.organizers.profile,
       });
     },
   });
