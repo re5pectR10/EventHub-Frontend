@@ -22,6 +22,9 @@ const nextConfig = {
       },
     ],
   },
+  // React strict mode configuration (disabled temporarily for auth debugging)
+  // Note: This is only for development debugging. Re-enable for production!
+  reactStrictMode: process.env.DISABLE_STRICT_MODE === "true" ? false : true,
   // Removed API rewrites since we're now using Supabase Edge Functions directly
 };
 

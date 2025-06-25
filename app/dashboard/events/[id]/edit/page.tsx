@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { useRouter, useParams } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -33,10 +33,10 @@ export default function EditEventPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createClient();
   const router = useRouter();
   const params = useParams();
   const eventId = params.id as string;
+  const { user, isLoading: authLoading } = useAuth();
 
   // Use React Query hooks
   const {
@@ -59,28 +59,14 @@ export default function EditEventPage() {
     setError(queryError);
   }
 
+  // Redirect if not authenticated
   useEffect(() => {
-    async function init() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/auth/signin");
-          return;
-        }
-      } catch (error) {
-        console.error("Error initializing:", error);
-        setError(
-          error instanceof Error ? error.message : "Failed to initialize"
-        );
-      } finally {
-        setLoading(false);
-      }
+    if (!authLoading && !user) {
+      router.push("/auth/signin");
+    } else if (user) {
+      setLoading(false);
     }
-
-    init();
-  }, []);
+  }, [user, authLoading, router]);
 
   // Update form data when event data is loaded
   useEffect(() => {
@@ -127,7 +113,7 @@ export default function EditEventPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  if (loading || categoriesLoading || eventLoading) {
+  if (loading || authLoading || categoriesLoading || eventLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

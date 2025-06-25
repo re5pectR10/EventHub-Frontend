@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +16,6 @@ import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCategories, useCreateEvent, useCreateTicket } from "@/lib/api";
-import { createClient } from "@/utils/supabase/client";
 import type { EventFormData, TicketTypeFormData } from "@/lib/types";
 
 // Alias for local usage
@@ -44,8 +44,8 @@ export default function CreateEventPage() {
     Record<string, string>
   >({});
 
-  const supabase = createClient();
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
 
   // Use React Query hooks
   const {
@@ -59,25 +59,14 @@ export default function CreateEventPage() {
 
   const error = categoriesError?.message || null;
 
+  // Redirect if not authenticated
   useEffect(() => {
-    async function init() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/auth/signin");
-          return;
-        }
-      } catch (error) {
-        console.error("Error initializing:", error);
-      } finally {
-        setLoading(false);
-      }
+    if (!authLoading && !user) {
+      router.push("/auth/signin");
+    } else if (user) {
+      setLoading(false);
     }
-
-    init();
-  }, []);
+  }, [user, authLoading, router]);
 
   const addTicketType = () => {
     const newTicket: TicketType = {
@@ -227,7 +216,7 @@ export default function CreateEventPage() {
     setEvent((prev) => ({ ...prev, [field]: value }));
   };
 
-  if (loading || categoriesLoading) {
+  if (loading || authLoading || categoriesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

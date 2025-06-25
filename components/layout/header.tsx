@@ -1,45 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Menu, X, User, LogOut } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { useAuth, useAuthActions } from "@/lib/stores/auth-store";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading } = useAuth();
+  const { signOut } = useAuthActions();
   const router = useRouter();
-  const supabase = createClient();
-
-  useEffect(() => {
-    // Get initial user
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-      setLoading(false);
-    };
-
-    getUser();
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     router.push("/");
     router.refresh();
   };
@@ -100,7 +75,7 @@ export function Header() {
 
           {/* Desktop Auth Buttons - Cleaner design */}
           <div className="hidden md:flex items-center space-x-3">
-            {loading ? (
+            {isLoading ? (
               <div className="w-20 h-8 bg-gray-200 animate-pulse rounded" />
             ) : user ? (
               <div className="flex items-center space-x-3">
@@ -201,7 +176,7 @@ export function Header() {
               )}
             </nav>
             <div className="pt-4 space-y-3 border-t border-border/50">
-              {loading ? (
+              {isLoading ? (
                 <div className="w-full h-8 bg-gray-200 animate-pulse rounded" />
               ) : user ? (
                 <div className="space-y-3">

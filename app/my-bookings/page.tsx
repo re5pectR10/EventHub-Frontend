@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,27 +39,12 @@ type BookingStatus = "all" | "confirmed" | "pending" | "cancelled";
 export default function MyBookingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<BookingStatus>("all");
-  const supabase = createClient();
   const router = useRouter();
+  const { user, isLoading: isLoadingUser } = useAuth();
 
-  // Check authentication
-  const {
-    data: user,
-    isLoading: isLoadingUser,
-    error: userError,
-  } = useQuery({
-    queryKey: ["user"],
-    queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-      return user;
-    },
-    retry: false,
-  });
+  // Redirect if not authenticated
+  const userError =
+    !user && !isLoadingUser ? new Error("Not authenticated") : null;
 
   // Fetch user's bookings
   const {

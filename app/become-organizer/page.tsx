@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,27 +44,12 @@ export default function BecomeOrganizerPage() {
     location: "",
   });
 
-  const supabase = createClient();
   const router = useRouter();
+  const { user, isLoading: isLoadingUser } = useAuth();
 
-  // Check authentication
-  const {
-    data: user,
-    isLoading: isLoadingUser,
-    error: userError,
-  } = useQuery({
-    queryKey: ["user"],
-    queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-      return user;
-    },
-    retry: false,
-  });
+  // Redirect if not authenticated
+  const userError =
+    !user && !isLoadingUser ? new Error("Not authenticated") : null;
 
   // Check if user is already an organizer
   const { data: existingOrganizer, isLoading: isLoadingOrganizer } = useQuery({

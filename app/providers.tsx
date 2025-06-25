@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { NotificationProvider } from "@/components/ui/notification-provider";
 import { Header } from "@/components/layout/header";
+import { AuthProvider } from "@/components/providers/auth-provider";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -27,9 +28,11 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Header />
-      {children}
-      <NotificationProvider />
+      <AuthProvider>
+        <Header />
+        {children}
+        <NotificationProvider />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

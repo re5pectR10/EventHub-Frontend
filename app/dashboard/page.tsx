@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import Link from "next/link";
 import { useDashboardStats } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,8 @@ import { CalendarIcon, UsersIcon, TicketIcon, PlusIcon } from "lucide-react";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
-  const supabase = createClient();
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
 
   // Use React Query hook for dashboard data
   const {
@@ -30,21 +29,14 @@ export default function DashboardPage() {
 
   const error = queryError?.message || null;
 
+  // Redirect if not authenticated
   useEffect(() => {
-    async function getUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth/signin");
-        return;
-      }
-      setUser(user);
+    if (!authLoading && !user) {
+      router.push("/auth/signin");
     }
-    getUser();
-  }, []);
+  }, [user, authLoading, router]);
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

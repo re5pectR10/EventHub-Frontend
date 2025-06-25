@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -53,20 +53,14 @@ export default function OrganizerProfilePage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
 
-  const supabase = createClient();
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
     async function loadProfile() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/auth/signin");
-          return;
-        }
+      if (!user) return;
 
+      try {
         const response = await apiService.getOrganizerProfile();
 
         if (response.organizer) {
@@ -100,7 +94,14 @@ export default function OrganizerProfilePage() {
     }
 
     loadProfile();
-  }, []);
+  }, [user]);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/auth/signin");
+    }
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,7 +227,7 @@ export default function OrganizerProfilePage() {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
