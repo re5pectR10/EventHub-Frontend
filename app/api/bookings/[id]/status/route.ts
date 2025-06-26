@@ -32,7 +32,7 @@ async function getOrganizer(userId: string) {
 // PUT /api/bookings/[id]/status - Update booking status
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getUserFromToken(
@@ -45,7 +45,7 @@ export async function PUT(
       );
     }
 
-    const bookingId = params.id;
+    const { id: bookingId } = await params;
     const { status } = await request.json();
 
     // Validate status

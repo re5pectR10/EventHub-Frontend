@@ -29,10 +29,10 @@ async function isEventOrganizer(
 // Get ticket type by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ticketTypeId = params.id;
+    const { id: ticketTypeId } = await params;
 
     const { data: ticketType, error } = await supabaseServer
       .from("ticket_types")
@@ -60,7 +60,7 @@ export async function GET(
 // Update ticket type
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get("Authorization") || undefined;
@@ -73,7 +73,7 @@ export async function PUT(
       );
     }
 
-    const ticketTypeId = params.id;
+    const { id: ticketTypeId } = await params;
     const body = await request.json();
 
     // Get the ticket type to check event ownership
@@ -150,7 +150,7 @@ export async function PUT(
 // Delete ticket type
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get("Authorization") || undefined;
@@ -163,7 +163,7 @@ export async function DELETE(
       );
     }
 
-    const ticketTypeId = params.id;
+    const { id: ticketTypeId } = await params;
 
     // Get the ticket type to check event ownership
     const { data: existingTicket, error: fetchError } = await supabaseServer

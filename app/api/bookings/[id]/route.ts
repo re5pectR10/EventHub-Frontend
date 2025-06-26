@@ -32,7 +32,7 @@ async function getOrganizer(userId: string) {
 // GET /api/bookings/[id] - Get booking by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getUserFromToken(
@@ -45,7 +45,7 @@ export async function GET(
       );
     }
 
-    const bookingId = params.id;
+    const { id: bookingId } = await params;
 
     // Get booking with full details
     const { data: booking, error } = await supabaseServer
@@ -111,7 +111,7 @@ export async function GET(
 // DELETE /api/bookings/[id] - Cancel booking
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getUserFromToken(
@@ -124,7 +124,7 @@ export async function DELETE(
       );
     }
 
-    const bookingId = params.id;
+    const { id: bookingId } = await params;
 
     // Check if booking exists and user owns it
     const { data: booking, error: bookingError } = await supabaseServer

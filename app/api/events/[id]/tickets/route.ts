@@ -5,9 +5,9 @@ import {
 } from "../../../../../lib/supabase-server";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Create ticket type for event
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = params;
+    const { id: eventId } = await params;
 
     // Check if user owns this event
     const { data: organizer } = await supabaseServer

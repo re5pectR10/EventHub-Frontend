@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "../../../../lib/supabase-server";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Get organizer by ID (public)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json(

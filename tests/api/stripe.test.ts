@@ -56,14 +56,18 @@ describe("Stripe API", () => {
       };
 
       mockStripe.accounts.create.mockResolvedValue(mockAccount);
-      mockSupabaseClient
-        .from()
-        .update()
-        .eq()
-        .mockResolvedValue({
+      // Mock the chain properly
+      const mockChain = {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           data: { stripe_account_id: mockAccount.id },
           error: null,
-        });
+        }),
+        single: vi.fn(),
+      };
+      mockSupabaseClient.from.mockReturnValue(mockChain);
 
       // Test would use actual API route handler here
       expect(mockStripe.accounts.create).toHaveBeenCalledTimes(0); // Reset for actual test
@@ -112,14 +116,18 @@ describe("Stripe API", () => {
       };
 
       mockStripe.webhooks.constructEvent.mockReturnValue(mockEvent);
-      mockSupabaseClient
-        .from()
-        .update()
-        .eq()
-        .mockResolvedValue({
+      // Mock the update chain
+      const mockUpdateChain = {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({
           data: { status: "confirmed" },
           error: null,
-        });
+        }),
+        single: vi.fn(),
+      };
+      mockSupabaseClient.from.mockReturnValue(mockUpdateChain);
 
       // Test would process webhook event
       expect(mockEvent.type).toBe("checkout.session.completed");

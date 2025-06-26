@@ -5,9 +5,9 @@ import {
 } from "../../../../../lib/supabase-server";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Update event status (authenticated organizers only)
@@ -23,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = params;
+    const { id: eventId } = await params;
     const { status } = await request.json();
 
     // Validate status

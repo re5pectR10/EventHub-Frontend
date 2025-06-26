@@ -5,9 +5,9 @@ import {
 } from "../../../../lib/supabase-server";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Helper function to check if a string is a valid UUID
@@ -20,7 +20,7 @@ function isValidUUID(str: string): boolean {
 // Get single event by ID or slug (unified route)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id: identifier } = params;
+    const { id: identifier } = await params;
     const authHeader = request.headers.get("Authorization") || undefined;
     const user = await getUserFromToken(authHeader);
 
@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = params;
+    const { id: eventId } = await params;
     const updateData = await request.json();
 
     // Check if user owns this event
@@ -168,7 +168,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = params;
+    const { id: eventId } = await params;
 
     // Check if user owns this event
     const { data: event, error: eventError } = await supabaseServer

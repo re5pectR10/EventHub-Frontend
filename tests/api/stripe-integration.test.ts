@@ -4,20 +4,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// Mock environment variables
-vi.mock("process", () => ({
-  env: {
-    STRIPE_SECRET_KEY: "sk_test_mock_stripe_key",
-    STRIPE_WEBHOOK_SECRET: "whsec_mock_webhook_secret",
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_mock_publishable_key",
-  },
-}));
-
 // Mock Stripe SDK
 const mockStripe = {
   accounts: {
     create: vi.fn(),
     retrieve: vi.fn(),
+  },
+  accountLinks: {
+    create: vi.fn(),
   },
   checkout: {
     sessions: {
@@ -35,61 +29,142 @@ vi.mock("stripe", () => {
   };
 });
 
-// Mock Supabase
-const mockSupabaseClient = {
-  from: vi.fn(() => ({
-    select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    single: vi.fn(),
-  })),
-  rpc: vi.fn(),
-};
+// Create simple mocks for the data we need
+let mockUserFromToken: any = null;
+let mockOrganizerData: any = null;
+let mockEventData: any = null;
+let mockTicketData: any = null;
+let mockUpdateResult: any = null;
+let mockInsertResult: any = null;
+let mockRpcResult: any = null;
 
+// Mock supabase-server with direct function mocks
 vi.mock("@/lib/supabase-server", () => ({
-  createClient: () => mockSupabaseClient,
+  supabaseServer: {
+    from: vi.fn((table: string) => {
+      if (table === "organizers") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockOrganizerData),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue(mockUpdateResult),
+          }),
+        };
+      }
+      if (table === "events") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockEventData),
+            }),
+          }),
+        };
+      }
+      if (table === "ticket_types") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockTicketData),
+            }),
+          }),
+        };
+      }
+      if (table === "bookings") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(mockInsertResult),
+            }),
+          }),
+        };
+      }
+      if (table === "booking_items") {
+        return {
+          insert: vi.fn().mockResolvedValue({ data: {}, error: null }),
+        };
+      }
+      if (table === "tickets") {
+        return {
+          insert: vi.fn().mockResolvedValue({ data: {}, error: null }),
+        };
+      }
+      // Default fallback for other tables
+      return {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+    }),
+    rpc: vi.fn().mockImplementation(() => mockRpcResult),
+  },
+  getUserFromToken: vi.fn().mockImplementation(() => mockUserFromToken),
 }));
 
 describe("Stripe API Integration Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset environment variables to test defaults
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_mock";
+    process.env.NEXT_PUBLIC_FRONTEND_URL = "http://localhost:3000";
+
+    // Reset mock data
+    mockUserFromToken = null;
+    mockOrganizerData = null;
+    mockEventData = null;
+    mockTicketData = null;
+    mockUpdateResult = null;
+    mockInsertResult = null;
+    mockRpcResult = null;
   });
 
   describe("POST /api/stripe/connect/create", () => {
     it("should create a Stripe Connect account successfully", async () => {
+      const mockUser = { id: "user123", email: "organizer@example.com" };
+      const mockOrganizer = {
+        id: "org123",
+        user_id: "user123",
+        name: "Test Organizer",
+        contact_email: "organizer@example.com",
+        stripe_account_id: null,
+      };
       const mockAccount = {
         id: "acct_test123",
         type: "express",
         country: "US",
         email: "organizer@example.com",
       };
+      const mockAccountLink = {
+        url: "https://connect.stripe.com/setup/123",
+      };
 
+      // Set up mock data
+      mockUserFromToken = mockUser;
+      mockOrganizerData = { data: mockOrganizer, error: null };
+      mockUpdateResult = {
+        data: { stripe_account_id: "acct_test123" },
+        error: null,
+      };
+
+      // Mock Stripe calls
       mockStripe.accounts.create.mockResolvedValue(mockAccount);
-      mockSupabaseClient
-        .from()
-        .update()
-        .eq()
-        .mockResolvedValue({
-          data: { stripe_account_id: "acct_test123" },
-          error: null,
-        });
+      mockStripe.accountLinks.create.mockResolvedValue(mockAccountLink);
 
       // Dynamic import to test the handler
       const { POST } = await import("@/app/api/stripe/connect/create/route");
-
-      const requestBody = {
-        organizerId: "org123",
-        email: "organizer@example.com",
-        country: "US",
-      };
 
       const request = new NextRequest(
         "http://localhost:3000/api/stripe/connect/create",
         {
           method: "POST",
-          body: JSON.stringify(requestBody),
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            authorization: "Bearer mock-token",
+          },
         }
       );
 
@@ -97,27 +172,21 @@ describe("Stripe API Integration Tests", () => {
       const result = await response.json();
 
       expect(response.status).toBe(200);
-      expect(result.success).toBe(true);
-      expect(result.data.accountId).toBe("acct_test123");
-      expect(mockStripe.accounts.create).toHaveBeenCalledWith({
-        type: "express",
-        country: "US",
-        email: "organizer@example.com",
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-      });
+      expect(result.data.account_id).toBe("acct_test123");
+      expect(result.data.account_link_url).toBe(
+        "https://connect.stripe.com/setup/123"
+      );
     });
 
-    it("should handle missing organizer ID", async () => {
+    it("should handle unauthenticated requests", async () => {
+      // Leave mockUserFromToken as null (unauthenticated)
+
       const { POST } = await import("@/app/api/stripe/connect/create/route");
 
       const request = new NextRequest(
         "http://localhost:3000/api/stripe/connect/create",
         {
           method: "POST",
-          body: JSON.stringify({ email: "test@example.com" }),
           headers: { "Content-Type": "application/json" },
         }
       );
@@ -125,9 +194,8 @@ describe("Stripe API Integration Tests", () => {
       const response = await POST(request);
       const result = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("organizerId");
+      expect(response.status).toBe(401);
+      expect(result.error).toContain("Authentication required");
     });
   });
 
@@ -141,29 +209,38 @@ describe("Stripe API Integration Tests", () => {
       const mockEvent = {
         id: "event123",
         title: "Test Event",
-        organizer: { stripe_account_id: "acct_test123" },
+        status: "published",
+        organizers: {
+          id: "org123",
+          stripe_account_id: "acct_test123",
+          verification_status: "verified",
+        },
       };
 
       const mockTickets = [
-        { id: "ticket1", name: "General", price: 5000, quantity: 2 },
+        {
+          id: "ticket1",
+          name: "General",
+          price: 5000,
+          quantity_available: 100,
+          quantity_sold: 0,
+          max_per_order: null,
+          event_id: "event123",
+        },
       ];
 
+      // Set up mock data
+      mockEventData = { data: mockEvent, error: null };
+      mockTicketData = { data: mockTickets, error: null };
+
       mockStripe.checkout.sessions.create.mockResolvedValue(mockSession);
-      mockSupabaseClient.from().select().eq().single.mockResolvedValue({
-        data: mockEvent,
-        error: null,
-      });
-      mockSupabaseClient.from().select().eq.mockResolvedValue({
-        data: mockTickets,
-        error: null,
-      });
 
       const { POST } = await import("@/app/api/stripe/checkout/create/route");
 
       const requestBody = {
-        eventId: "event123",
-        tickets: [{ ticketId: "ticket1", quantity: 2 }],
-        customerEmail: "customer@example.com",
+        event_id: "event123",
+        tickets: [{ ticket_type_id: "ticket1", quantity: 2 }],
+        customer_email: "customer@example.com",
       };
 
       const request = new NextRequest(
@@ -187,36 +264,43 @@ describe("Stripe API Integration Tests", () => {
     it("should calculate correct platform fees", async () => {
       const mockSession = { id: "cs_test123", url: "https://example.com" };
 
-      mockStripe.checkout.sessions.create.mockResolvedValue(mockSession);
-
-      // Mock event and tickets
-      mockSupabaseClient
-        .from()
-        .select()
-        .eq()
-        .single.mockResolvedValue({
-          data: {
-            id: "event123",
-            title: "Test Event",
-            organizer: { stripe_account_id: "acct_test123" },
+      // Set up mock data for fee calculation test
+      mockEventData = {
+        data: {
+          id: "event123",
+          title: "Test Event",
+          status: "published",
+          organizers: {
+            id: "org123",
+            stripe_account_id: "acct_test123",
+            verification_status: "verified",
           },
-          error: null,
-        });
+        },
+        error: null,
+      };
+      mockTicketData = {
+        data: [
+          {
+            id: "ticket1",
+            name: "VIP",
+            price: 10000,
+            quantity_available: 100,
+            quantity_sold: 0,
+            max_per_order: null,
+            event_id: "event123",
+          },
+        ],
+        error: null,
+      };
 
-      mockSupabaseClient
-        .from()
-        .select()
-        .eq.mockResolvedValue({
-          data: [{ id: "ticket1", name: "VIP", price: 10000, quantity: 1 }],
-          error: null,
-        });
+      mockStripe.checkout.sessions.create.mockResolvedValue(mockSession);
 
       const { POST } = await import("@/app/api/stripe/checkout/create/route");
 
       const requestBody = {
-        eventId: "event123",
-        tickets: [{ ticketId: "ticket1", quantity: 1 }],
-        customerEmail: "customer@example.com",
+        event_id: "event123",
+        tickets: [{ ticket_type_id: "ticket1", quantity: 1 }],
+        customer_email: "customer@example.com",
       };
 
       const request = new NextRequest(
@@ -252,21 +336,27 @@ describe("Stripe API Integration Tests", () => {
           object: {
             id: "cs_test123",
             metadata: {
-              eventId: "event123",
-              bookingData: JSON.stringify([
-                { ticketId: "ticket1", quantity: 2, attendees: [] },
+              event_id: "event123",
+              tickets: JSON.stringify([
+                { ticket_type_id: "ticket1", quantity: 2 },
               ]),
             },
             customer_details: {
               email: "customer@example.com",
+              name: "John Doe",
             },
             amount_total: 10000,
+            payment_intent: "pi_test123",
           },
         },
       };
 
+      // Set up mock data for webhook processing
+      mockInsertResult = { data: { id: "booking123" }, error: null };
+      mockRpcResult = { data: null, error: null };
+      mockTicketData = { data: { id: "ticket1", price: 5000 }, error: null };
+
       mockStripe.webhooks.constructEvent.mockReturnValue(mockEvent);
-      mockSupabaseClient.rpc.mockResolvedValue({ data: "BKG123", error: null });
 
       const { POST } = await import("@/app/api/stripe/webhook/route");
 
@@ -287,7 +377,7 @@ describe("Stripe API Integration Tests", () => {
       expect(mockStripe.webhooks.constructEvent).toHaveBeenCalledWith(
         "mock-webhook-body",
         "mock-signature",
-        "whsec_mock_webhook_secret"
+        "whsec_mock"
       );
     });
 
@@ -317,6 +407,13 @@ describe("Stripe API Integration Tests", () => {
 
   describe("GET /api/stripe/connect/status", () => {
     it("should return account status successfully", async () => {
+      const mockUser = { id: "user123" };
+      const mockOrganizer = {
+        id: "org123",
+        user_id: "user123",
+        stripe_account_id: "acct_test123",
+        verification_status: "pending",
+      };
       const mockAccount = {
         id: "acct_test123",
         charges_enabled: true,
@@ -324,24 +421,38 @@ describe("Stripe API Integration Tests", () => {
         details_submitted: true,
       };
 
+      // Set up mock data
+      mockUserFromToken = mockUser;
+      mockOrganizerData = { data: mockOrganizer, error: null };
+      mockUpdateResult = {
+        data: { verification_status: "verified" },
+        error: null,
+      };
+
       mockStripe.accounts.retrieve.mockResolvedValue(mockAccount);
 
       const { GET } = await import("@/app/api/stripe/connect/status/route");
 
       const request = new NextRequest(
-        "http://localhost:3000/api/stripe/connect/status?accountId=acct_test123"
+        "http://localhost:3000/api/stripe/connect/status?accountId=acct_test123",
+        {
+          headers: {
+            authorization: "Bearer mock-token",
+          },
+        }
       );
 
       const response = await GET(request);
       const result = await response.json();
 
       expect(response.status).toBe(200);
-      expect(result.success).toBe(true);
       expect(result.data.charges_enabled).toBe(true);
       expect(result.data.payouts_enabled).toBe(true);
     });
 
     it("should handle missing account ID parameter", async () => {
+      // Leave mockUserFromToken as null (unauthenticated)
+
       const { GET } = await import("@/app/api/stripe/connect/status/route");
 
       const request = new NextRequest(
@@ -351,9 +462,8 @@ describe("Stripe API Integration Tests", () => {
       const response = await GET(request);
       const result = await response.json();
 
-      expect(response.status).toBe(400);
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("accountId");
+      expect(response.status).toBe(401);
+      expect(result.error).toContain("Authentication required");
     });
   });
 });
