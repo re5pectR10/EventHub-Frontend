@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromToken, supabaseServer } from "../../../lib/supabase-server";
+import {
+  getUserFromToken,
+  getServerSupabaseClient,
+} from "../../../lib/supabase-server";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +16,8 @@ export async function GET(request: NextRequest) {
         error: "No authentication token found",
       });
     }
+
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check for organizer record
     const { data: organizer, error: organizerError } = await supabaseServer

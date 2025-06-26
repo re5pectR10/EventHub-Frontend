@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "../../../../../lib/supabase-server";
+import { getServerSupabaseClient } from "../../../../../lib/supabase-server";
 
 // Get ticket types for an event
 export async function GET(
@@ -9,6 +9,7 @@ export async function GET(
   try {
     const eventId = params.eventId;
 
+    const supabaseServer = await getServerSupabaseClient();
     const { data: ticketTypes, error } = await supabaseServer
       .from("ticket_types")
       .select("*")

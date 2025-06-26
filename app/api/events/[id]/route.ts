@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../lib/supabase-server";
 
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Check if identifier is a UUID or a slug
     const isUUID = isValidUUID(identifier);
 
+    const supabaseServer = await getServerSupabaseClient();
     let query = supabaseServer.from("events").select(`
         *,
         organizers(id, business_name, contact_email, description, website),
@@ -110,6 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { id: eventId } = await params;
     const updateData = await request.json();
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check if user owns this event
     const { data: event, error: eventError } = await supabaseServer
@@ -169,6 +171,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id: eventId } = await params;
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check if user owns this event
     const { data: event, error: eventError } = await supabaseServer
@@ -201,7 +204,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ message: "Event deleted successfully" });
   } catch (error) {
-    console.error("Event deletion error:", error);
+    console.error("Event delete error:", error);
     return NextResponse.json(
       { error: "Failed to delete event" },
       { status: 500 }
