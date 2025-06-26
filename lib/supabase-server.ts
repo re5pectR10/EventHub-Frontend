@@ -11,6 +11,10 @@ export const supabaseServer = createServerSupabaseClient();
 // This respects RLS and user context
 export const supabaseUser = createUserSupabaseClient();
 
+// Helper functions to create clients - these need to be called in async contexts
+export const getServerSupabaseClient = () => createServerSupabaseClient();
+export const getUserSupabaseClient = () => createUserSupabaseClient();
+
 // Helper function to get user from JWT token
 export async function getUserFromToken(authHeader: string | undefined) {
   if (!authHeader?.startsWith("Bearer ")) {
@@ -19,6 +23,7 @@ export async function getUserFromToken(authHeader: string | undefined) {
 
   const token = authHeader.substring(7);
   try {
+    const supabaseServer = await createServerSupabaseClient();
     const {
       data: { user },
       error,
@@ -36,3 +41,7 @@ export function isValidUUID(str: string): boolean {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
+
+// For backward compatibility - but these should be replaced with the async versions
+export const createServerClient = createServerSupabaseClient;
+export const createUserClient = createUserSupabaseClient;
