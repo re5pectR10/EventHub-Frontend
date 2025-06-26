@@ -1,37 +1,43 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-export async function createClient() {
-  const cookieStore = await cookies();
+// Server-side client with service role key (bypasses RLS)
+export function createServerSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("Missing Supabase server environment variables:", {
+      url: !!supabaseUrl,
+      serviceKey: !!supabaseServiceKey,
+    });
+    throw new Error(
+      "Missing Supabase server environment variables. Please check SUPABASE_SERVICE_ROLE_KEY is set."
+    );
+  }
+
+  return createServerClient(supabaseUrl, supabaseServiceKey, {
+    cookies: {
+      get(name: string) {
+        return cookies().get(name)?.value;
+      },
+    },
+  });
+}
+
+// Client-side client with user context (respects RLS)
+export function createUserSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Missing Supabase environment variables:", {
-      url: !!supabaseUrl,
-      key: !!supabaseAnonKey,
-    });
-    throw new Error(
-      "Missing Supabase environment variables. Please check your .env file and ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set."
-    );
+    throw new Error("Missing Supabase client environment variables");
   }
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
-        }
+      get(name: string) {
+        return cookies().get(name)?.value;
       },
     },
   });

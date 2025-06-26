@@ -97,70 +97,242 @@ class ApiService {
     }
   }
 
-  // Events
+  // Events - migrated to Next.js API routes
   async getEvents(params?: EventSearchParams): Promise<ApiResponse<Event[]>> {
-    const searchParams = new URLSearchParams();
+    try {
+      const searchParams = new URLSearchParams();
 
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        });
+      }
+
+      const queryString = searchParams.toString();
+      const response = await fetch(
+        `/api/events${queryString ? `?${queryString}` : ""}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
-      });
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Events API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-
-    const queryString = searchParams.toString();
-    const path = `${queryString ? `?${queryString}` : ""}`;
-
-    return this.fetchWithAuth<Event[]>("events", path);
   }
 
   async getFeaturedEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetchWithAuth<Event[]>("events", "/featured");
+    try {
+      const response = await fetch("/api/events/featured", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Featured Events API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getEvent(id: string): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", `/${id}`);
+    try {
+      const response = await fetch(`/api/events/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Event API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getEventBySlug(slug: string): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", `/slug/${slug}`);
+    // Use the unified route that handles both ID and slug
+    return this.getEvent(slug);
   }
 
   async createEvent(eventData: Partial<Event>): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", "", {
-      method: "POST",
-      body: JSON.stringify(eventData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Create Event API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async updateEvent(
     id: string,
     eventData: Partial<Event>
   ): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", `/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(eventData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/events/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Event API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async updateEventStatus(
     id: string,
     status: "draft" | "published" | "cancelled"
   ): Promise<ApiResponse<Event>> {
-    return this.fetchWithAuth<Event>("events", `/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/events/${id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Event Status API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async deleteEvent(id: string): Promise<ApiResponse<void>> {
-    return this.fetchWithAuth<void>("events", `/${id}`, {
-      method: "DELETE",
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/events/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Delete Event API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
-  // Ticket Types
+  // Ticket Types - migrated to Next.js API routes
   async createTicketType(ticketData: {
     event_id: string;
     name: string;
@@ -171,41 +343,202 @@ class ApiService {
     sale_end_date?: string;
     max_per_order?: number;
   }): Promise<ApiResponse<TicketType>> {
-    return this.fetchWithAuth<TicketType>("ticket-types", "", {
-      method: "POST",
-      body: JSON.stringify(ticketData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(
+        `/api/events/${ticketData.event_id}/tickets`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify(ticketData),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Create Ticket Type API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getTicketType(id: string): Promise<ApiResponse<TicketType>> {
+    try {
+      const response = await fetch(`/api/tickets/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Ticket Type API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getTicketTypesByEvent(
+    eventId: string
+  ): Promise<ApiResponse<TicketType[]>> {
+    try {
+      const response = await fetch(`/api/tickets/event/${eventId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Ticket Types API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async updateTicketType(
     id: string,
     ticketData: Partial<TicketType>
   ): Promise<ApiResponse<TicketType>> {
-    return this.fetchWithAuth<TicketType>("ticket-types", `/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(ticketData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/tickets/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(ticketData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Ticket Type API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async deleteTicketType(id: string): Promise<ApiResponse<void>> {
-    return this.fetchWithAuth<void>("ticket-types", `/${id}`, {
-      method: "DELETE",
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/tickets/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Delete Ticket Type API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   // Note: getEventTicketTypes removed as ticket types are included in getEvent response
 
   // Stripe Connect
   async createStripeConnectAccount(): Promise<
-    ApiResponse<{ account_link_url: string }>
+    ApiResponse<{ account_link_url: string; account_id: string }>
   > {
-    return this.fetchWithAuth<{ account_link_url: string }>(
-      "stripe",
-      "/connect/create",
-      {
-        method: "POST",
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
       }
-    );
+
+      const response = await fetch("/api/stripe/connect/create", {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Stripe Connect API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getStripeConnectStatus(): Promise<
@@ -214,14 +547,42 @@ class ApiService {
       verification_status?: string;
       charges_enabled?: boolean;
       payouts_enabled?: boolean;
+      requirements?: any;
     }>
   > {
-    return this.fetchWithAuth<{
-      account_id?: string;
-      verification_status?: string;
-      charges_enabled?: boolean;
-      payouts_enabled?: boolean;
-    }>("stripe", "/connect/status");
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Stripe Connect Status API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async createStripeCheckoutSession(data: {
@@ -232,55 +593,242 @@ class ApiService {
     }>;
     customer_email?: string;
   }): Promise<ApiResponse<{ checkout_url: string; session_id: string }>> {
-    return this.fetchWithAuth<{ checkout_url: string; session_id: string }>(
-      "stripe",
-      "/checkout/create",
-      {
+    try {
+      const response = await fetch("/api/stripe/checkout/create", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
       }
-    );
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error("Stripe Checkout API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
-  // Categories
+  // Categories - migrated to Next.js API route
   async getCategories(): Promise<ApiResponse<Category[]>> {
-    return this.fetchWithAuth<Category[]>("categories", "");
+    try {
+      const response = await fetch("/api/categories", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Categories API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
-  // Organizers
+  // Organizers - migrated to Next.js API routes
   async getOrganizers(): Promise<Organizer[]> {
-    const response = await this.fetchWithAuth<Organizer[]>("organizers", "");
-    return response.data || [];
+    try {
+      const response = await fetch("/api/organizers", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.error("Organizers API Error:", error);
+      return [];
+    }
   }
 
   async getOrganizerProfile(): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/profile");
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/organizers/profile", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Organizer Profile API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getOrganizerById(id: string): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", `/${id}`);
+    try {
+      const response = await fetch(`/api/organizers/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Organizer By ID API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async createOrganizerProfile(
     organizerData: Partial<Organizer>
   ): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/profile", {
-      method: "POST",
-      body: JSON.stringify(organizerData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/organizers/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(organizerData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Create Organizer Profile API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async updateOrganizerProfile(
     organizerData: Partial<Organizer>
   ): Promise<ApiResponse<Organizer>> {
-    return this.fetchWithAuth<Organizer>("organizers", "/profile", {
-      method: "PUT",
-      body: JSON.stringify(organizerData),
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/organizers/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(organizerData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Organizer Profile API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getOrganizerEvents(): Promise<ApiResponse<Event[]>> {
-    return this.fetchWithAuth<Event[]>("events", "/my-events");
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/events/my-events", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Organizer Events API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   // Get single event for organizer (includes their own draft events)
@@ -299,16 +847,101 @@ class ApiService {
   }
 
   // Bookings
+  // Bookings - migrated to Next.js API routes
   async getBookings(): Promise<ApiResponse<Booking[]>> {
-    return this.fetchWithAuth<Booking[]>("bookings", "");
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/bookings", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Bookings API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getOrganizerBookings(): Promise<ApiResponse<Booking[]>> {
-    return this.fetchWithAuth<Booking[]>("bookings", "/organizer");
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/bookings/organizer", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Organizer Bookings API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async getBooking(id: string): Promise<ApiResponse<Booking>> {
-    return this.fetchWithAuth<Booking>("bookings", `/${id}`);
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/bookings/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Booking API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async createBooking(bookingData: {
@@ -321,20 +954,105 @@ class ApiService {
     customer_email: string;
     customer_phone?: string;
   }): Promise<ApiResponse<{ booking: Booking; checkout_url: string }>> {
-    return this.fetchWithAuth<{ booking: Booking; checkout_url: string }>(
-      "bookings",
-      "",
-      {
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch("/api/bookings", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Note: Authentication is optional for booking creation
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: JSON.stringify(bookingData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
       }
-    );
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Create Booking API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   async cancelBooking(id: string): Promise<ApiResponse<Booking>> {
-    return this.fetchWithAuth<Booking>("bookings", `/${id}/cancel`, {
-      method: "POST",
-    });
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/bookings/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Cancel Booking API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async updateBookingStatus(
+    id: string,
+    status: "pending" | "confirmed" | "cancelled"
+  ): Promise<ApiResponse<Booking>> {
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/bookings/${id}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Booking Status API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 
   // Search events with advanced filtering
@@ -537,14 +1255,29 @@ export function useTicketsByEvent(eventId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.tickets.byEvent(eventId),
     queryFn: async () => {
-      const response = await apiService.getEvent(eventId);
+      const response = await apiService.getTicketTypesByEvent(eventId);
       if (response.error) {
         throw new Error(response.error);
       }
-      const eventData = response.event || response.data;
-      return eventData?.ticket_types || [];
+      return response.ticket_types || [];
     },
     enabled: !!eventId,
+    staleTime: 1 * 60 * 1000, // 1 minute
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTicketType(id: string) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.tickets.all, "detail", id],
+    queryFn: async () => {
+      const response = await apiService.getTicketType(id);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.ticket_type || response.data;
+    },
+    enabled: !!id,
     staleTime: 1 * 60 * 1000, // 1 minute
     refetchOnWindowFocus: false,
   });

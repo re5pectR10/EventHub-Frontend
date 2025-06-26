@@ -199,6 +199,8 @@ export interface ApiResponse<T> {
   bookings?: Booking[];
   booking?: Booking;
   organizer?: Organizer;
+  organizer_id?: string;
+  ticket_type?: TicketType;
   ticket_types?: TicketType[];
   pagination?: {
     page: number;
@@ -208,6 +210,7 @@ export interface ApiResponse<T> {
   };
   error?: string;
   checkout_url?: string;
+  message?: string;
 }
 
 // Component prop types
