@@ -1,7 +1,5 @@
 "use client";
 
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,20 +8,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  CheckCircle,
-  Calendar,
-  MapPin,
-  Clock,
-  CreditCard,
-  AlertCircle,
-  Loader2,
-} from "lucide-react";
 import { apiService } from "@/lib/api";
 import { toast } from "@/lib/notifications";
-import type { Booking } from "@/lib/types";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  Calendar,
+  CheckCircle,
+  CreditCard,
+  Loader2,
+  MapPin,
+} from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -198,16 +197,12 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex gap-4">
-                <Button
-                  onClick={() => router.push("/my-bookings")}
-                  className="flex-1"
-                >
+                <Button onClick={() => router.push("/my-bookings")}>
                   View My Bookings
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => router.push("/events")}
-                  className="flex-1"
                 >
                   Browse More Events
                 </Button>
@@ -219,175 +214,171 @@ export default function CheckoutPage() {
     );
   }
 
+  // Main checkout view
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Secure Checkout
-          </h1>
-          <p className="text-gray-600">Complete your booking with Stripe</p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
+          <p className="text-gray-600">Complete your booking</p>
         </div>
 
+        {/* Event Details */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-blue-600" />
-              Booking Summary
-            </CardTitle>
-            <CardDescription>Booking ID: {booking.id}</CardDescription>
+            <CardTitle>{booking.events?.title}</CardTitle>
+            <CardDescription>
+              {booking.events?.start_date &&
+                booking.events?.start_time &&
+                formatDate(
+                  booking.events.start_date,
+                  booking.events.start_time
+                )}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Event Details */}
-            <div>
-              <h3 className="font-semibold text-lg mb-3">
-                {booking.events?.title}
-              </h3>
-              <div className="space-y-2 text-gray-600">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    {booking.events?.start_date &&
-                      booking.events?.start_time &&
-                      formatDate(
-                        booking.events.start_date,
-                        booking.events.start_time
-                      )}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span>
-                    {booking.events?.start_time &&
-                      (booking.events?.end_time
-                        ? `${formatTime(
-                            booking.events.start_time
-                          )} - ${formatTime(booking.events.end_time)}`
-                        : formatTime(booking.events.start_time))}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  <span>{booking.events?.location_name}</span>
-                </div>
-                {booking.events?.location_address && (
-                  <p className="text-sm text-gray-500 ml-6">
-                    {booking.events.location_address}
-                  </p>
-                )}
-              </div>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span>
+                {booking.events?.start_date &&
+                  booking.events?.start_time &&
+                  formatTime(booking.events.start_time)}
+              </span>
             </div>
-
-            {/* Customer Details */}
-            <div className="border-t pt-6">
-              <h4 className="font-medium mb-3">Customer Information</h4>
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="font-medium">Name:</span>{" "}
-                  {booking.customer_name}
-                </p>
-                <p>
-                  <span className="font-medium">Email:</span>{" "}
-                  {booking.customer_email}
-                </p>
-                {booking.customer_phone && (
-                  <p>
-                    <span className="font-medium">Phone:</span>{" "}
-                    {booking.customer_phone}
-                  </p>
-                )}
-              </div>
+            <div className="flex items-center gap-2 text-gray-600">
+              <MapPin className="h-4 w-4" />
+              <span>{booking.events?.location_name || "Location TBA"}</span>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Ticket Details */}
-            <div className="border-t pt-6">
-              <h4 className="font-medium mb-3">Tickets</h4>
-              <div className="space-y-2">
-                {booking.booking_items?.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>
-                      {item.quantity}x {item.ticket_types?.name}
-                    </span>
-                    <span>${(item.total_price || 0).toFixed(2)}</span>
+        {/* Booking Summary */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Booking Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {booking.booking_items?.map((item, index) => (
+                <div key={index} className="flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">
+                      {item.ticket_types?.name || "Ticket"}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Quantity: {item.quantity}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <p className="font-medium">
+                    ${(item.total_price || 0).toFixed(2)}
+                  </p>
+                </div>
+              ))}
 
-            {/* Payment Summary */}
-            <div className="border-t pt-6">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
+              <div className="border-t pt-3">
+                <div className="flex justify-between items-center font-semibold text-lg">
+                  <span>Total</span>
                   <span>${(booking.total_price || 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Platform fee (5%)</span>
-                  <span>${((booking.total_price || 0) * 0.05).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2">
-                  <span>Total</span>
-                  <span>${((booking.total_price || 0) * 1.05).toFixed(2)}</span>
-                </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Error Message */}
-            {createCheckoutMutation.error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <p className="text-sm text-red-600">
-                    {createCheckoutMutation.error instanceof Error
-                      ? createCheckoutMutation.error.message
-                      : "An error occurred"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const eventSlug = booking.events?.slug || "event";
-                  router.push(`/events/${eventSlug}/book`);
-                }}
-                className="flex-1"
-                disabled={createCheckoutMutation.isPending}
-              >
-                Back to Booking
-              </Button>
-              <Button
-                onClick={handlePayWithStripe}
-                disabled={createCheckoutMutation.isPending}
-                className="flex-1 flex items-center gap-2 bg-[#635BFF] hover:bg-[#5A52FF]"
-              >
-                {createCheckoutMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Redirecting...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4" />
-                    Pay with Stripe
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="text-center">
-              <p className="text-xs text-gray-500">
-                🔒 Secure payment powered by Stripe
+        {/* Customer Information */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p>
+                <span className="font-medium">Name:</span>{" "}
+                {booking.customer_name}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Your payment information is encrypted and secure
+              <p>
+                <span className="font-medium">Email:</span>{" "}
+                {booking.customer_email}
+              </p>
+              <p>
+                <span className="font-medium">Phone:</span>{" "}
+                {booking.customer_phone || "Not provided"}
               </p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Payment Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Payment
+            </CardTitle>
+            <CardDescription>
+              Complete your payment to confirm the booking
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={handlePayWithStripe}
+              className="w-full"
+              size="lg"
+              disabled={createCheckoutMutation.isPending}
+            >
+              {createCheckoutMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Checkout...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Pay ${(booking.total_price || 0).toFixed(2)} with Stripe
+                </>
+              )}
+            </Button>
+
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-600">
+                Secure payment powered by Stripe
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Terms */}
+        <div className="text-center text-sm text-gray-600">
+          <p>
+            By completing this purchase, you agree to our{" "}
+            <a href="/terms" className="text-blue-600 hover:underline">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="/privacy" className="text-blue-600 hover:underline">
+              Privacy Policy
+            </a>
+            .
+          </p>
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading checkout...</p>
+          </div>
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
   );
 }
