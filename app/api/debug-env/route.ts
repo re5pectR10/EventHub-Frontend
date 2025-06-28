@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     // Check environment variables (without exposing the actual values)
@@ -27,10 +30,20 @@ export async function GET() {
       vercel_env: process.env.VERCEL_ENV || "unknown",
     };
 
-    return NextResponse.json({
-      message: "Environment variables check",
-      env_check: envCheck,
-    });
+    return NextResponse.json(
+      {
+        message: "Environment variables check",
+        env_check: envCheck,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error) {
     console.error("Debug env error:", error);
     return NextResponse.json(
