@@ -15,9 +15,7 @@ export async function createServerSupabaseClient() {
       "Missing Supabase server environment variables. Please check SUPABASE_SERVICE_ROLE_KEY is set."
     );
   }
-  console.log("supabaseUrl", supabaseUrl);
-  console.log("supabaseServiceKey", supabaseServiceKey);
-  console.log("supabaseServiceKey length", process.env);
+
   const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseServiceKey, {
