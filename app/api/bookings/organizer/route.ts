@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../lib/supabase-server";
 
 // Helper function to check if user is organizer
 async function getOrganizer(userId: string) {
   try {
+    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select("id")
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
     // Get all bookings for events owned by this organizer
     const { data: bookings, error } = await supabaseServer
       .from("bookings")

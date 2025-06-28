@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../lib/supabase-server";
 
-// Get organizer's own events (authenticated)
+// GET /api/events/my-events - Get events created by the authenticated organizer
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("Authorization") || undefined;
@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
+
     // Check if user is an organizer
     const { data: organizer, error: organizerError } = await supabaseServer
       .from("organizers")
@@ -26,17 +28,17 @@ export async function GET(request: NextRequest) {
 
     if (organizerError || !organizer) {
       return NextResponse.json(
-        { error: "Organizer profile required" },
+        { error: "User is not an organizer" },
         { status: 403 }
       );
     }
 
-    const { data: events, error } = await supabaseServer
+    // Get events created by this organizer
+    const { data: events, error: eventsError } = await supabaseServer
       .from("events")
       .select(
         `
         *,
-        organizers(business_name, contact_email),
         event_categories(name, slug),
         event_images(image_url, alt_text, is_primary),
         ticket_types(id, name, price, quantity_available, quantity_sold)
@@ -45,19 +47,58 @@ export async function GET(request: NextRequest) {
       .eq("organizer_id", organizer.id)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Supabase error:", error);
+    if (eventsError) {
+      console.error("Database error:", eventsError);
       return NextResponse.json(
-        { error: `Failed to fetch organizer events: ${error.message}` },
+        { error: `Failed to fetch events: ${eventsError.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ events });
+    // Calculate additional metrics for each event
+    const eventsWithMetrics = (events || []).map((event: any) => {
+      const totalTickets =
+        event.ticket_types?.reduce(
+          (sum: number, ticket: any) => sum + ticket.quantity_available,
+          0
+        ) || 0;
+
+      const soldTickets =
+        event.ticket_types?.reduce(
+          (sum: number, ticket: any) => sum + ticket.quantity_sold,
+          0
+        ) || 0;
+
+      const revenue =
+        event.ticket_types?.reduce(
+          (sum: number, ticket: any) =>
+            sum + ticket.price * ticket.quantity_sold,
+          0
+        ) || 0;
+
+      return {
+        ...event,
+        metrics: {
+          total_tickets: totalTickets,
+          sold_tickets: soldTickets,
+          available_tickets: totalTickets - soldTickets,
+          total_revenue: revenue,
+          sales_percentage:
+            totalTickets > 0
+              ? Math.round((soldTickets / totalTickets) * 100)
+              : 0,
+        },
+      };
+    });
+
+    return NextResponse.json({
+      events: eventsWithMetrics,
+      organizer_id: organizer.id,
+    });
   } catch (error) {
-    console.error("Organizer events fetch error:", error);
+    console.error("My events fetch error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch organizer events" },
+      { error: "Failed to fetch events" },
       { status: 500 }
     );
   }

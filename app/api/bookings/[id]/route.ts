@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../lib/supabase-server";
 
 // Helper function to check if user is organizer
 async function getOrganizer(userId: string) {
   try {
+    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select("id")
@@ -46,6 +47,7 @@ export async function GET(
     }
 
     const { id: bookingId } = await params;
+    const supabaseServer = await getServerSupabaseClient();
 
     // Get booking with full details
     const { data: booking, error } = await supabaseServer
@@ -125,6 +127,7 @@ export async function DELETE(
     }
 
     const { id: bookingId } = await params;
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check if booking exists and user owns it
     const { data: booking, error: bookingError } = await supabaseServer

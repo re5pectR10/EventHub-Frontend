@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "../../../../lib/supabase-server";
+import { getServerSupabaseClient } from "../../../../lib/supabase-server";
 
 interface RouteParams {
   params: Promise<{
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select(

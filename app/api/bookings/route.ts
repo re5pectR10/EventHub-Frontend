@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer, getUserFromToken } from "../../../lib/supabase-server";
+import {
+  getServerSupabaseClient,
+  getUserFromToken,
+} from "../../../lib/supabase-server";
 
 interface BookingItemRequest {
   ticket_type_id: string;
@@ -17,6 +20,7 @@ interface CreateBookingRequest {
 // Helper function to check if user is organizer
 async function getOrganizer(userId: string) {
   try {
+    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select("id")
@@ -52,6 +56,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
     const { data: bookings, error } = await supabaseServer
       .from("bookings")
       .select(
@@ -107,6 +112,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const supabaseServer = await getServerSupabaseClient();
 
     // Validate event exists and is bookable
     const { data: event, error: eventError } = await supabaseServer
@@ -202,39 +209,49 @@ export async function POST(request: NextRequest) {
     }
 
     // Create booking items
-    const bookingItemsData = validatedItems.map((item) => ({
+    const bookingItems = validatedItems.map((item) => ({
       booking_id: booking.id,
       ticket_type_id: item.ticket_type_id,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total_price: item.total_price,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     }));
 
     const { error: itemsError } = await supabaseServer
       .from("booking_items")
-      .insert(bookingItemsData);
+      .insert(bookingItems);
 
     if (itemsError) {
-      // Rollback booking if items creation fails
-      await supabaseServer.from("bookings").delete().eq("id", booking.id);
       console.error("Booking items creation error:", itemsError);
+      // Rollback booking creation
+      await supabaseServer.from("bookings").delete().eq("id", booking.id);
       return NextResponse.json(
         { error: `Failed to create booking items: ${itemsError.message}` },
         { status: 500 }
       );
     }
 
-    // Create Stripe checkout session URL (placeholder for now)
-    const checkoutUrl = `${
-      process.env.NEXTAUTH_URL || "http://localhost:3000"
-    }/checkout/${booking.id}`;
+    // Update ticket type sold quantities
+    for (const item of validatedItems) {
+      const { error: updateError } = await supabaseServer
+        .from("ticket_types")
+        .update({
+          quantity_sold: supabaseServer.rpc("increment", {
+            increment_by: item.quantity,
+          }),
+        })
+        .eq("id", item.ticket_type_id);
 
-    return NextResponse.json(
-      { booking, checkout_url: checkoutUrl },
-      { status: 201 }
-    );
+      if (updateError) {
+        console.error("Ticket quantity update error:", updateError);
+        // Note: Not rolling back here as this is a soft failure
+      }
+    }
+
+    return NextResponse.json({
+      booking,
+      message: "Booking created successfully",
+    });
   } catch (error) {
     console.error("Booking creation error:", error);
     return NextResponse.json(

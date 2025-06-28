@@ -1,61 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  supabaseServer,
-  getUserFromToken,
-} from "../../../../lib/supabase-server";
+import { getServerSupabaseClient } from "../../../../lib/supabase-server";
 
-// Get organizer's events (authenticated)
+// GET /api/organizers/events - Get events for a specific organizer (public)
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("Authorization") || undefined;
-    const user = await getUserFromToken(authHeader);
+    const { searchParams } = new URL(request.url);
+    const organizerId = searchParams.get("organizer_id");
 
-    if (!user) {
+    if (!organizerId) {
       return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
+        { error: "Organizer ID is required" },
+        { status: 400 }
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
+
     const { data: organizer, error: organizerError } = await supabaseServer
       .from("organizers")
-      .select("id")
-      .eq("user_id", user.id)
+      .select("id, business_name")
+      .eq("id", organizerId)
       .single();
 
     if (organizerError || !organizer) {
       return NextResponse.json(
-        { error: "Organizer profile not found" },
+        { error: "Organizer not found" },
         { status: 404 }
       );
     }
 
-    const { data: events, error } = await supabaseServer
+    // Get published events for this organizer
+    const { data: events, error: eventsError } = await supabaseServer
       .from("events")
       .select(
         `
         *,
         event_categories(name, slug),
-        event_images(image_url, is_primary),
+        event_images(image_url, alt_text, is_primary),
         ticket_types(id, name, price, quantity_available, quantity_sold)
       `
       )
-      .eq("organizer_id", organizer.id)
-      .order("created_at", { ascending: false });
+      .eq("organizer_id", organizerId)
+      .eq("status", "published")
+      .order("start_date", { ascending: true });
 
-    if (error) {
-      console.error("Supabase error:", error);
+    if (eventsError) {
+      console.error("Database error:", eventsError);
       return NextResponse.json(
-        { error: `Failed to fetch events: ${error.message}` },
+        { error: `Failed to fetch events: ${eventsError.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ events });
+    return NextResponse.json({
+      events: events || [],
+      organizer: organizer,
+    });
   } catch (error) {
     console.error("Organizer events fetch error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch events" },
+      { error: "Failed to fetch organizer events" },
       { status: 500 }
     );
   }

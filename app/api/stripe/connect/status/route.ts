@@ -1,42 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../../lib/supabase-server";
-import Stripe from "stripe";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-05-28.basil",
 });
 
 // Helper function to get organizer
 async function getOrganizer(userId: string) {
-  try {
-    const { data: organizer, error } = await supabaseServer
-      .from("organizers")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+  const supabaseServer = await getServerSupabaseClient();
+  const { data: organizer, error } = await supabaseServer
+    .from("organizers")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
 
-    if (error) {
-      console.error("Error fetching organizer:", error);
+  if (error) {
+    if (error.code === "PGRST116") {
       return null;
     }
-
-    return organizer;
-  } catch (error) {
-    console.error("Error in getOrganizer:", error);
-    return null;
+    throw error;
   }
+
+  return organizer;
 }
 
 // GET /api/stripe/connect/status - Get Stripe Connect account status
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUserFromToken(
-      request.headers.get("authorization") || undefined
-    );
+    const authHeader = request.headers.get("Authorization") || undefined;
+    const user = await getUserFromToken(authHeader);
+
     if (!user) {
       return NextResponse.json(
         { error: "Authentication required" },
@@ -44,58 +42,66 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if user is an organizer
     const organizer = await getOrganizer(user.id);
-    if (!organizer || !organizer.stripe_account_id) {
+    if (!organizer) {
+      return NextResponse.json(
+        { error: "User is not an organizer" },
+        { status: 403 }
+      );
+    }
+
+    if (!organizer.stripe_account_id) {
       return NextResponse.json({
-        data: {
-          account_id: null,
-          verification_status: "not_connected",
-          charges_enabled: false,
-          payouts_enabled: false,
-        },
+        connected: false,
+        message: "No Stripe account connected",
       });
     }
 
-    // Get account details from Stripe
+    // Get Stripe account details
     const account = await stripe.accounts.retrieve(organizer.stripe_account_id);
 
-    const verificationStatus =
-      account.charges_enabled && account.payouts_enabled
-        ? "verified"
-        : account.requirements?.currently_due &&
-          account.requirements.currently_due.length > 0
-        ? "pending"
-        : "rejected";
+    const status = {
+      connected: true,
+      account_id: account.id,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      details_submitted: account.details_submitted,
+      verification_status:
+        account.charges_enabled && account.payouts_enabled
+          ? "verified"
+          : "pending",
+      requirements: {
+        currently_due: account.requirements?.currently_due || [],
+        eventually_due: account.requirements?.eventually_due || [],
+        past_due: account.requirements?.past_due || [],
+        pending_verification: account.requirements?.pending_verification || [],
+      },
+      business_profile: {
+        name: account.business_profile?.name,
+        url: account.business_profile?.url,
+        support_email: account.business_profile?.support_email,
+      },
+    };
 
-    // Update verification status in database if changed
-    if (organizer.verification_status !== verificationStatus) {
+    // Update verification status in database if it changed
+    const newVerificationStatus = status.verification_status;
+    if (organizer.verification_status !== newVerificationStatus) {
+      const supabaseServer = await getServerSupabaseClient();
       await supabaseServer
         .from("organizers")
         .update({
-          verification_status: verificationStatus,
+          verification_status: newVerificationStatus,
           updated_at: new Date().toISOString(),
         })
         .eq("id", organizer.id);
     }
 
-    return NextResponse.json({
-      data: {
-        account_id: organizer.stripe_account_id,
-        verification_status: verificationStatus,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        requirements: account.requirements,
-      },
-    });
+    return NextResponse.json(status);
   } catch (error) {
     console.error("Stripe Connect status error:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to get Stripe Connect status",
-      },
+      { error: "Failed to get Stripe Connect status" },
       { status: 500 }
     );
   }

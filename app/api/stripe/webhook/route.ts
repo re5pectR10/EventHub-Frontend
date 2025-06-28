@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "../../../../lib/supabase-server";
 import Stripe from "stripe";
+import { getServerSupabaseClient } from "../../../../lib/supabase-server";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2025-05-28.basil",
 });
 
 // Helper functions
@@ -32,6 +32,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
 
     const tickets = JSON.parse(ticketsMetadata);
+    const supabaseServer = await getServerSupabaseClient();
 
     // Create booking record
     const bookingData = {
@@ -119,6 +120,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 // Handle Stripe account updates
 async function handleAccountUpdated(account: Stripe.Account) {
   try {
+    const supabaseServer = await getServerSupabaseClient();
+
     const verificationStatus =
       account.charges_enabled && account.payouts_enabled
         ? "verified"
@@ -143,26 +146,25 @@ async function handleAccountUpdated(account: Stripe.Account) {
   }
 }
 
-// POST /api/stripe/webhook - Stripe webhook handler
+// POST /api/stripe/webhook - Handle Stripe webhooks
 export async function POST(request: NextRequest) {
   try {
+    const sig = request.headers.get("stripe-signature");
     const body = await request.text();
-    const signature = request.headers.get("stripe-signature");
 
-    if (!signature) {
+    if (!sig) {
       return NextResponse.json(
-        { error: "Missing Stripe signature" },
+        { error: "Missing stripe-signature header" },
         { status: 400 }
       );
     }
 
+    // Verify webhook signature
     let event: Stripe.Event;
-
     try {
-      // Verify webhook signature
       event = stripe.webhooks.constructEvent(
         body,
-        signature,
+        sig,
         process.env.STRIPE_WEBHOOK_SECRET!
       );
     } catch (err) {
@@ -170,28 +172,70 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
-    // Handle the event
+    console.log(`Received Stripe webhook: ${event.type}`);
+
+    const supabaseServer = await getServerSupabaseClient();
+
+    // Handle different event types
     switch (event.type) {
       case "checkout.session.completed":
         await handleCheckoutCompleted(
           event.data.object as Stripe.Checkout.Session
         );
         break;
+
       case "account.updated":
         await handleAccountUpdated(event.data.object as Stripe.Account);
         break;
+
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        console.log(`Payment succeeded: ${paymentIntent.id}`);
+        break;
+
+      case "payment_intent.payment_failed":
+        const failedPayment = event.data.object as Stripe.PaymentIntent;
+        console.log(`Payment failed: ${failedPayment.id}`);
+
+        // Mark associated booking as cancelled
+        const { data: failedBooking } = await supabaseServer
+          .from("bookings")
+          .select("id")
+          .eq("payment_intent_id", failedPayment.id)
+          .single();
+
+        if (failedBooking) {
+          await supabaseServer
+            .from("bookings")
+            .update({
+              status: "cancelled",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", failedBooking.id);
+        }
+        break;
+
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.log(`Unhandled Stripe event type: ${event.type}`);
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("Stripe webhook processing error:", error);
     return NextResponse.json(
-      { error: "Webhook processing failed" },
+      { error: "Failed to process webhook" },
       { status: 500 }
     );
   }
+}
+
+// GET /api/stripe/webhook - Health check
+export async function GET() {
+  return NextResponse.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "stripe-webhook",
+  });
 }
 
 // Disable body parsing for webhooks

@@ -4,10 +4,10 @@ import { getServerSupabaseClient } from "../../../../../lib/supabase-server";
 // Get ticket types for an event
 export async function GET(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
-    const eventId = params.eventId;
+    const { eventId } = await params;
 
     const supabaseServer = await getServerSupabaseClient();
     const { data: ticketTypes, error } = await supabaseServer
