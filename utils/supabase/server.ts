@@ -17,6 +17,7 @@ export async function createServerSupabaseClient() {
   }
   console.log("supabaseUrl", supabaseUrl);
   console.log("supabaseServiceKey", supabaseServiceKey);
+  console.log("supabaseServiceKey length", process.env);
   const cookieStore = await cookies();
 
   return createServerClient(supabaseUrl, supabaseServiceKey, {
