@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    console.log("categories route", process.env.SUPABASE_SERVICE_ROLE_KEY);
     const supabaseServer = await getServerSupabaseClient();
     const { data: categories, error } = await supabaseServer
       .from("event_categories")
