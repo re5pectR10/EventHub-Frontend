@@ -5,9 +5,8 @@ import {
 } from "../../../../lib/supabase-server";
 
 // Helper function to check if user is organizer
-async function getOrganizer(userId: string) {
+async function getOrganizer(userId: string, supabaseServer: any) {
   try {
-    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select("id")
@@ -90,7 +89,7 @@ export async function GET(
 
     // If not the booking owner, check if they're the event organizer
     if (!hasAccess) {
-      const organizer = await getOrganizer(user.id);
+      const organizer = await getOrganizer(user.id, supabaseServer);
       if (organizer && booking.events) {
         hasAccess = booking.events.organizer_id === organizer.id;
       }

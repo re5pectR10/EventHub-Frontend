@@ -5,9 +5,8 @@ import {
 } from "../../../../lib/supabase-server";
 
 // Helper function to check if user is organizer
-async function getOrganizer(userId: string) {
+async function getOrganizer(userId: string, supabaseServer: any) {
   try {
-    const supabaseServer = await getServerSupabaseClient();
     const { data: organizer, error } = await supabaseServer
       .from("organizers")
       .select("id")
@@ -43,8 +42,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const supabaseServer = await getServerSupabaseClient();
+
     // Check if user is an organizer
-    const organizer = await getOrganizer(user.id);
+    const organizer = await getOrganizer(user.id, supabaseServer);
     if (!organizer) {
       return NextResponse.json(
         { error: "User is not an organizer" },
@@ -52,7 +53,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabaseServer = await getServerSupabaseClient();
     // Get all bookings for events owned by this organizer
     const { data: bookings, error } = await supabaseServer
       .from("bookings")
