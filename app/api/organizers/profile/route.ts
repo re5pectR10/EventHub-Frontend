@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT /api/organizers/profile - Update organizer profile
-export async function PUT(request: NextRequest) {
+// POST /api/organizers/profile - Update organizer profile
+export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get("Authorization") || undefined;
     const user = await getUserFromToken(authHeader);
