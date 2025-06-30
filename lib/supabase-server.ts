@@ -5,12 +5,6 @@ import {
   createUserSupabaseClient,
 } from "@/utils/supabase/server";
 
-// This bypasses RLS and should only be used in secure server environments
-export const supabaseServer = createServerSupabaseClient();
-
-// This respects RLS and user context
-export const supabaseUser = createUserSupabaseClient();
-
 // Helper functions to create clients - these need to be called in async contexts
 export const getServerSupabaseClient = () => createServerSupabaseClient();
 export const getUserSupabaseClient = () => createUserSupabaseClient();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../../lib/supabase-server";
 
@@ -10,9 +10,10 @@ interface RouteParams {
   }>;
 }
 
-// Update event status (authenticated organizers only)
+// PATCH /api/events/[id]/status - Update event status (organizers only)
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const { id: eventId } = await params;
     const authHeader = request.headers.get("Authorization") || undefined;
     const user = await getUserFromToken(authHeader);
 
@@ -23,16 +24,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = await params;
     const { status } = await request.json();
 
-    // Validate status
-    if (!["draft", "published", "cancelled"].includes(status)) {
+    if (!status || !["draft", "published", "cancelled"].includes(status)) {
       return NextResponse.json(
         { error: "Invalid status. Must be draft, published, or cancelled" },
         { status: 400 }
       );
     }
+
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check if user owns this event
     const { data: event, error: eventError } = await supabaseServer
@@ -45,8 +46,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
+    // Verify ownership
     if ((event.organizers as any)?.user_id !== user.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return NextResponse.json(
+        { error: "You don't have permission to update this event" },
+        { status: 403 }
+      );
     }
 
     // Update event status
@@ -68,7 +73,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ event: updatedEvent });
+    return NextResponse.json({
+      event: updatedEvent,
+      message: `Event status updated to ${status}`,
+    });
   } catch (error) {
     console.error("Event status update error:", error);
     return NextResponse.json(

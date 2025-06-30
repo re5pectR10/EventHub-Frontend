@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEvents, useCategories } from "@/lib/api";
-import { Search, Filter, SlidersHorizontal, Grid, List } from "lucide-react";
-import { Footer } from "@/components/layout/footer";
 import { EventCard } from "@/components/events/event-card";
+import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { useCategories, useEvents } from "@/lib/api";
 import type { EventSearchParams } from "@/lib/types";
+import { Grid, List, Search, SlidersHorizontal } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 interface FilterState {
   query: string;
@@ -21,7 +20,7 @@ interface FilterState {
   sort: "date_asc" | "date_desc" | "price_asc" | "price_desc";
 }
 
-export default function EventsPage() {
+function EventsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -207,11 +206,12 @@ export default function EventsPage() {
 
             {/* Advanced Filters */}
             {showFilters && (
-              <Card className="mb-4">
-                <CardContent className="p-4">
+              <Card className="p-4">
+                <CardContent className="p-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Category Filter */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Category
                       </label>
                       <select
@@ -222,17 +222,18 @@ export default function EventsPage() {
                         className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background"
                         disabled={categoriesLoading}
                       >
-                        <option value="">All categories</option>
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.id}>
+                        <option value="">All Categories</option>
+                        {categories.map((category: any) => (
+                          <option key={category.id} value={category.slug}>
                             {category.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
+                    {/* Date From */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         From Date
                       </label>
                       <Input
@@ -241,11 +242,13 @@ export default function EventsPage() {
                         onChange={(e) =>
                           handleFilterChange("dateFrom", e.target.value)
                         }
+                        className="text-sm"
                       />
                     </div>
 
+                    {/* Date To */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         To Date
                       </label>
                       <Input
@@ -254,149 +257,159 @@ export default function EventsPage() {
                         onChange={(e) =>
                           handleFilterChange("dateTo", e.target.value)
                         }
+                        className="text-sm"
                       />
                     </div>
 
+                    {/* Location */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Location
                       </label>
                       <Input
                         type="text"
-                        placeholder="City, venue, address..."
+                        placeholder="City or venue"
                         value={filters.location}
                         onChange={(e) =>
                           handleFilterChange("location", e.target.value)
                         }
+                        className="text-sm"
                       />
                     </div>
                   </div>
                 </CardContent>
               </Card>
             )}
-
-            {/* Results count */}
-            <div className="text-sm text-gray-600">
-              {loading ? "Loading..." : `${events.length} events found`}
-            </div>
           </div>
         </section>
 
-        {/* Events Grid */}
-        <section className="container-clean py-8">
-          {error && (
-            <div className="text-center py-12">
-              <p className="text-red-600 mb-4">{error}</p>
-              <Button onClick={() => window.location.reload()}>
-                Try again
-              </Button>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-gray-200 rounded-lg h-48 mb-4"></div>
-                  <div className="space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        {/* Results */}
+        <section className="py-8">
+          <div className="container-clean">
+            {error ? (
+              <div className="text-center py-12">
+                <p className="text-red-600 mb-4">Failed to load events</p>
+                <p className="text-gray-600">{error}</p>
+              </div>
+            ) : loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="border rounded-lg overflow-hidden animate-pulse"
+                  >
+                    <div className="bg-gray-200 h-48"></div>
+                    <div className="p-4">
+                      <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded mb-2 w-2/3"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : events.length === 0 ? (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No events found
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Try adjusting your search criteria or browse all events.
-              </p>
-              <Button onClick={clearFilters}>Clear filters</Button>
-            </div>
-          ) : (
-            <>
-              <div
-                className={`grid gap-6 ${
-                  viewMode === "grid"
-                    ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-                    : "grid-cols-1"
-                }`}
-              >
-                {events.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    className={viewMode === "list" ? "md:flex md:flex-row" : ""}
-                  />
                 ))}
               </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex justify-center mt-8 gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((prev) => prev - 1)}
-                  >
-                    Previous
-                  </Button>
-
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const page = currentPage <= 3 ? i + 1 : currentPage - 2 + i;
-                    if (page > totalPages) return null;
-
-                    return (
-                      <Button
-                        key={page}
-                        variant={page === currentPage ? "default" : "outline"}
-                        onClick={() => setCurrentPage(page)}
-                      >
-                        {page}
-                      </Button>
-                    );
-                  })}
-
-                  <Button
-                    variant="outline"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((prev) => prev + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* Organizer CTA Section */}
-        <section className="bg-primary/5 py-16">
-          <div className="container-clean">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Ready to host your own event?
-              </h2>
-              <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-                Join thousands of organizers who trust our platform to manage
-                their events, sell tickets, and connect with their audience.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild size="lg" className="btn-clean btn-primary">
-                  <Link href="/dashboard">Start Creating Events</Link>
-                </Button>
-                <Button variant="outline" size="lg" asChild>
-                  <Link href="/organizers">Browse Organizers</Link>
-                </Button>
+            ) : events.length === 0 ? (
+              <div className="text-center py-12">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  No events found
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Try adjusting your search or filters to find more events.
+                </p>
+                {hasActiveFilters && (
+                  <Button onClick={clearFilters}>Clear Filters</Button>
+                )}
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-6">
+                  <p className="text-gray-600">
+                    Found {eventsData?.pagination?.total || events.length}{" "}
+                    events
+                  </p>
+                </div>
+
+                <div
+                  className={
+                    viewMode === "grid"
+                      ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                      : "space-y-4"
+                  }
+                >
+                  {events.map((event: any) => (
+                    <EventCard key={event.id} event={event} />
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center mt-12">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setCurrentPage(Math.max(1, currentPage - 1))
+                        }
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+
+                      <div className="flex gap-1">
+                        {Array.from(
+                          { length: Math.min(5, totalPages) },
+                          (_, i) => {
+                            const page = i + 1;
+                            return (
+                              <Button
+                                key={page}
+                                variant={
+                                  currentPage === page ? "default" : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                              >
+                                {page}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setCurrentPage(Math.min(totalPages, currentPage + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </section>
       </main>
-
       <Footer />
     </div>
+  );
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading events...</p>
+          </div>
+        </div>
+      }
+    >
+      <EventsContent />
+    </Suspense>
   );
 }

@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  CheckCircle,
-  Calendar,
-  MapPin,
-  Clock,
-  Mail,
-  Download,
-} from "lucide-react";
+import { Calendar, CheckCircle, Download, Mail } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
-export default function BookingSuccessPage() {
+function BookingSuccessContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -195,5 +188,22 @@ export default function BookingSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading booking details...</p>
+          </div>
+        </div>
+      }
+    >
+      <BookingSuccessContent />
+    </Suspense>
   );
 }

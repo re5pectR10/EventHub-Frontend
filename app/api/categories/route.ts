@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSupabaseClient } from "../../../lib/supabase-server";
 
-export async function GET(request: NextRequest) {
+// Force dynamic rendering to prevent caching issues
+export const dynamic = "force-dynamic";
+
+export async function GET() {
   try {
     const supabaseServer = await getServerSupabaseClient();
     const { data: categories, error } = await supabaseServer
@@ -17,7 +20,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ categories: categories || [] });
+    return NextResponse.json(
+      { categories: categories || [] },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error("Categories fetch error:", error);
     return NextResponse.json(

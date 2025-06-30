@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  supabaseServer,
+  getServerSupabaseClient,
   getUserFromToken,
 } from "../../../../../lib/supabase-server";
 
@@ -10,9 +10,48 @@ interface RouteParams {
   }>;
 }
 
-// Create ticket type for event
+interface TicketTypeRequest {
+  name: string;
+  description?: string;
+  price: number;
+  quantity_available: number;
+  max_per_order?: number;
+}
+
+// GET /api/events/[id]/tickets - Get ticket types for an event
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id: eventId } = await params;
+
+    const supabaseServer = await getServerSupabaseClient();
+    const { data: ticketTypes, error } = await supabaseServer
+      .from("ticket_types")
+      .select("*")
+      .eq("event_id", eventId)
+      .order("price", { ascending: true });
+
+    if (error) {
+      console.error("Database error:", error);
+      return NextResponse.json(
+        { error: `Failed to fetch ticket types: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ticket_types: ticketTypes || [] });
+  } catch (error) {
+    console.error("Ticket types fetch error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch ticket types" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/events/[id]/tickets - Create ticket types for an event (organizers only)
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const { id: eventId } = await params;
     const authHeader = request.headers.get("Authorization") || undefined;
     const user = await getUserFromToken(authHeader);
 
@@ -23,7 +62,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: eventId } = await params;
+    const ticketData: TicketTypeRequest = await request.json();
+
+    const supabaseServer = await getServerSupabaseClient();
 
     // Check if user owns this event
     const { data: organizer } = await supabaseServer
@@ -34,47 +75,54 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (!organizer) {
       return NextResponse.json(
-        { error: "Organizer profile required" },
+        { error: "User is not an organizer" },
         { status: 403 }
       );
     }
 
     // Verify event ownership
-    const { data: existingEvent } = await supabaseServer
+    const { data: event, error: eventError } = await supabaseServer
       .from("events")
       .select("organizer_id")
       .eq("id", eventId)
+      .eq("organizer_id", organizer.id)
       .single();
 
-    if (!existingEvent || existingEvent.organizer_id !== organizer.id) {
+    if (eventError || !event) {
       return NextResponse.json(
-        { error: "Event not found or unauthorized" },
+        { error: "Event not found or you don't have permission" },
         { status: 404 }
       );
     }
 
-    const body = await request.json();
-    const ticketTypeData = {
-      ...body,
-      event_id: eventId,
-      created_at: new Date().toISOString(),
-    };
-
-    const { data: ticketType, error } = await supabaseServer
+    // Create ticket type
+    const { data: ticketType, error: ticketError } = await supabaseServer
       .from("ticket_types")
-      .insert(ticketTypeData)
+      .insert({
+        ...ticketData,
+        event_id: eventId,
+        quantity_sold: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .select()
       .single();
 
-    if (error) {
-      console.error("Database error:", error);
+    if (ticketError) {
+      console.error("Database error:", ticketError);
       return NextResponse.json(
-        { error: `Failed to create ticket type: ${error.message}` },
+        { error: `Failed to create ticket type: ${ticketError.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ticketType }, { status: 201 });
+    return NextResponse.json(
+      {
+        ticket_type: ticketType,
+        message: "Ticket type created successfully",
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Ticket type creation error:", error);
     return NextResponse.json(

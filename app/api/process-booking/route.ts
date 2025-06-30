@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer, getUserFromToken } from "../../../lib/supabase-server";
+import {
+  getServerSupabaseClient,
+  getUserFromToken,
+} from "../../../lib/supabase-server";
 
 interface BookingTicket {
   type: string;
@@ -18,6 +21,14 @@ interface BookingRequest {
   tickets: BookingTicket[];
   attendees: BookingAttendee[];
   specialRequests?: string;
+}
+
+interface ProcessBookingRequest {
+  booking_id: string;
+  payment_intent_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
 }
 
 // POST /api/process-booking - Process booking with attendees and tickets
@@ -87,6 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify event exists
+    const supabaseServer = await getServerSupabaseClient();
     const { data: event, error: eventError } = await supabaseServer
       .from("events")
       .select("id, title, status")
