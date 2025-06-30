@@ -21,9 +21,6 @@ const nextConfig = {
   // Note: This is only for development debugging. Re-enable for production!
   reactStrictMode: process.env.DISABLE_STRICT_MODE === "true" ? false : true,
   // Removed API rewrites since we're now using Supabase Edge Functions directly
-  env: {
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  },
 };
 
 module.exports = nextConfig;
