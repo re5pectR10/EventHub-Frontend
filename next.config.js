@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@local-events-hub/database"],
   eslint: {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors. We'll fix these issues after deployment.

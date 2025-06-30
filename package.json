@@ -15,7 +15,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@local-events-hub/database": "file:../../packages/database",
     "@next/env": "^15.3.4",
     "@radix-ui/react-slot": "^1.0.2",
     "@supabase/ssr": "^0.6.1",
