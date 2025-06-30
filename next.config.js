@@ -1,11 +1,11 @@
 const { loadEnvConfig } = require("@next/env");
 
 // Load environment variables from the project root (monorepo setup)
-const projectDir = process.cwd().includes("apps/web")
-  ? process.cwd().replace("/apps/web", "").replace("\\apps\\web", "")
-  : process.cwd();
+// const projectDir = process.cwd().includes("apps/web")
+//   ? process.cwd().replace("/apps/web", "").replace("\\apps\\web", "")
+//   : process.cwd();
 
-loadEnvConfig(projectDir);
+// loadEnvConfig(projectDir);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
