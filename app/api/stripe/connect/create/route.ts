@@ -32,6 +32,10 @@ async function getOrganizer(userId: string) {
 // POST /api/stripe/connect/create - Create Stripe Connect account
 export async function POST(request: NextRequest) {
   try {
+    console.log("POST /api/stripe/connect/create - Request received");
+    console.log("Content-Type:", request.headers.get("Content-Type"));
+    console.log("Request method:", request.method);
+
     const authHeader = request.headers.get("Authorization") || undefined;
     const user = await getUserFromToken(authHeader);
 
@@ -51,11 +55,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const {
-      business_email,
-      business_name,
-      country = "US",
-    } = await request.json();
+    // Validate Content-Type header
+    const contentType = request.headers.get("Content-Type");
+    if (!contentType || !contentType.includes("application/json")) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      );
+    }
+
+    // Add error handling for JSON parsing
+    let requestBody;
+    try {
+      const bodyText = await request.text();
+      console.log("Raw request body:", bodyText);
+      console.log("Body length:", bodyText.length);
+
+      if (!bodyText.trim()) {
+        return NextResponse.json(
+          { error: "Request body is empty" },
+          { status: 400 }
+        );
+      }
+
+      requestBody = JSON.parse(bodyText);
+      console.log("Parsed request body:", requestBody);
+    } catch (jsonError) {
+      console.error("Failed to parse JSON:", jsonError);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+
+    const { business_email, business_name, country = "US" } = requestBody;
 
     if (!business_email || !business_name) {
       return NextResponse.json(
