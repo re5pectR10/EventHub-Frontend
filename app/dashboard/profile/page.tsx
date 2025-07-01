@@ -23,7 +23,6 @@ import {
 
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { apiService } from "@/lib/api";
-import type { Organizer } from "@/lib/types";
 
 // Form-specific interface for profile editing
 interface OrganizerProfileForm {
@@ -493,8 +492,8 @@ export default function OrganizerProfilePage() {
                         Remaining funds are transferred to your Stripe account
                       </li>
                       <li>
-                        Payouts follow Stripe's standard schedule (typically 2-7
-                        business days)
+                        Payouts follow Stripe&apos;s standard schedule
+                        (typically 2-7 business days)
                       </li>
                     </ul>
                   </div>

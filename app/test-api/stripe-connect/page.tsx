@@ -10,11 +10,9 @@ export default function TestStripeConnectPage() {
     message: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    business_email: "",
-    business_name: "",
-    country: "US",
-  });
+  const [note] = useState(
+    "No form data needed - the API now uses your organizer profile data automatically!"
+  );
 
   const testStripeConnect = async () => {
     setIsLoading(true);
@@ -25,15 +23,13 @@ export default function TestStripeConnectPage() {
       // Get auth token from wherever you store it (localStorage, cookies, etc.)
       const authToken = localStorage.getItem("access_token"); // Adjust based on your auth implementation
 
-      console.log("Sending request with data:", formData);
+      console.log("Sending request (no body needed - uses profile data)");
 
       const response = await fetch("/api/stripe/connect/create", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           ...(authToken && { Authorization: `Bearer ${authToken}` }),
         },
-        body: JSON.stringify(formData),
       });
 
       console.log("Response status:", response.status);
@@ -70,63 +66,13 @@ export default function TestStripeConnectPage() {
       <h1 className="text-2xl font-bold mb-6">Test Stripe Connect API</h1>
 
       <div className="max-w-md space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Business Email
-          </label>
-          <input
-            type="email"
-            value={formData.business_email}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                business_email: e.target.value,
-              }))
-            }
-            className="w-full p-2 border rounded"
-            placeholder="business@example.com"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Business Name
-          </label>
-          <input
-            type="text"
-            value={formData.business_name}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                business_name: e.target.value,
-              }))
-            }
-            className="w-full p-2 border rounded"
-            placeholder="My Business LLC"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Country</label>
-          <select
-            value={formData.country}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, country: e.target.value }))
-            }
-            className="w-full p-2 border rounded"
-          >
-            <option value="US">United States</option>
-            <option value="GB">United Kingdom</option>
-            <option value="CA">Canada</option>
-            <option value="AU">Australia</option>
-          </select>
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-sm text-blue-700">{note}</p>
         </div>
 
         <button
           onClick={testStripeConnect}
-          disabled={
-            isLoading || !formData.business_email || !formData.business_name
-          }
+          disabled={isLoading}
           className="w-full bg-blue-500 text-white p-2 rounded disabled:opacity-50"
         >
           {isLoading ? "Creating..." : "Test Stripe Connect Creation"}
@@ -155,9 +101,12 @@ export default function TestStripeConnectPage() {
           <li>
             Make sure you&apos;re logged in and have organizer permissions
           </li>
+          <li>
+            Ensure you have a complete organizer profile with business name and
+            contact email
+          </li>
           <li>Check the browser console for detailed request/response logs</li>
-          <li>The API will validate Content-Type is application/json</li>
-          <li>Empty or malformed JSON will return a specific error message</li>
+          <li>The API now uses your organizer profile data automatically</li>
           <li>Check your Stripe dashboard for created accounts</li>
         </ul>
       </div>

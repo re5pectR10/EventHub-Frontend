@@ -55,44 +55,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate Content-Type header
-    const contentType = request.headers.get("Content-Type");
-    if (!contentType || !contentType.includes("application/json")) {
+    // Get organizer details for business information
+    const supabaseClient = await getServerSupabaseClient();
+    const { data: organizerDetails, error: orgError } = await supabaseClient
+      .from("organizers")
+      .select("*")
+      .eq("id", organizer.id)
+      .single();
+
+    if (orgError || !organizerDetails) {
       return NextResponse.json(
-        { error: "Content-Type must be application/json" },
-        { status: 400 }
+        { error: "Failed to get organizer details" },
+        { status: 500 }
       );
     }
 
-    // Add error handling for JSON parsing
-    let requestBody;
-    try {
-      const bodyText = await request.text();
-      console.log("Raw request body:", bodyText);
-      console.log("Body length:", bodyText.length);
-
-      if (!bodyText.trim()) {
-        return NextResponse.json(
-          { error: "Request body is empty" },
-          { status: 400 }
-        );
-      }
-
-      requestBody = JSON.parse(bodyText);
-      console.log("Parsed request body:", requestBody);
-    } catch (jsonError) {
-      console.error("Failed to parse JSON:", jsonError);
-      return NextResponse.json(
-        { error: "Invalid JSON in request body" },
-        { status: 400 }
-      );
-    }
-
-    const { business_email, business_name, country = "US" } = requestBody;
+    // Use organizer profile data for Stripe account creation
+    const business_email = organizerDetails.contact_email || user.email;
+    const business_name = organizerDetails.business_name;
+    const country = "US"; // Default to US, can be made configurable later
 
     if (!business_email || !business_name) {
       return NextResponse.json(
-        { error: "Business email and name are required" },
+        {
+          error:
+            "Business email and name are required. Please complete your organizer profile first.",
+        },
         { status: 400 }
       );
     }
@@ -140,8 +128,10 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      account_id: account.id,
-      onboarding_url: accountLink.url,
+      data: {
+        account_id: account.id,
+        account_link_url: accountLink.url,
+      },
       message: "Stripe Connect account created successfully",
     });
   } catch (error) {

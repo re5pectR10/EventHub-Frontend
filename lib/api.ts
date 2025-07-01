@@ -511,9 +511,7 @@ class ApiService {
         data: { session },
       } = await this.supabase.auth.getSession();
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+      const headers: Record<string, string> = {};
 
       if (session?.access_token) {
         headers.Authorization = `Bearer ${session.access_token}`;
