@@ -1,369 +1,195 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 
-interface TestResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-  timestamp: string;
-}
+export default function TestWebhooksPage() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | object | null>(null);
 
-const sampleWebhookPayloads = {
-  checkout_session_completed: {
-    id: "evt_test_webhook",
-    object: "event",
-    api_version: "2023-10-16",
-    created: Math.floor(Date.now() / 1000),
-    data: {
-      object: {
-        id: "cs_test_checkout_session",
-        object: "checkout.session",
-        amount_total: 5000,
-        customer_details: {
-          email: "test@example.com",
-          name: "Test Customer",
-        },
-        metadata: {
-          event_id: "test-event-id",
-          tickets: JSON.stringify([
-            {
-              ticket_type_id: "test-ticket-type-id",
-              quantity: 2,
-            },
-          ]),
-        },
-        payment_intent: "pi_test_payment_intent",
-        payment_status: "paid",
-        status: "complete",
-      },
-    },
-    type: "checkout.session.completed",
-  },
-  payment_intent_succeeded: {
-    id: "evt_test_webhook",
-    object: "event",
-    api_version: "2023-10-16",
-    created: Math.floor(Date.now() / 1000),
-    data: {
-      object: {
-        id: "pi_test_payment_intent",
-        object: "payment_intent",
-        amount: 5000,
-        currency: "usd",
-        status: "succeeded",
-      },
-    },
-    type: "payment_intent.succeeded",
-  },
-  payment_intent_failed: {
-    id: "evt_test_webhook",
-    object: "event",
-    api_version: "2023-10-16",
-    created: Math.floor(Date.now() / 1000),
-    data: {
-      object: {
-        id: "pi_test_payment_intent_failed",
-        object: "payment_intent",
-        amount: 5000,
-        currency: "usd",
-        status: "requires_payment_method",
-        last_payment_error: {
-          message: "Your card was declined.",
-          type: "card_error",
-        },
-      },
-    },
-    type: "payment_intent.payment_failed",
-  },
-  account_updated: {
-    id: "evt_test_webhook",
-    object: "event",
-    api_version: "2023-10-16",
-    created: Math.floor(Date.now() / 1000),
-    data: {
-      object: {
-        id: "acct_test_account",
-        object: "account",
-        charges_enabled: true,
-        payouts_enabled: true,
-        requirements: {
-          currently_due: [],
-        },
-      },
-    },
-    type: "account.updated",
-  },
-};
-
-export default function WebhooksTestPage() {
-  const [results, setResults] = useState<Record<string, TestResult>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
-  const [customPayload, setCustomPayload] = useState("");
-
-  const logResult = (testName: string, result: TestResult) => {
-    setResults((prev) => ({ ...prev, [testName]: result }));
-    setLoading((prev) => ({ ...prev, [testName]: false }));
-  };
-
-  const testWebhookEndpoint = async (
-    testName: string,
-    payload: any,
-    headers: Record<string, string> = {}
-  ) => {
-    setLoading((prev) => ({ ...prev, [testName]: true }));
+  const testWebhookEndpoint = async () => {
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const response = await fetch("/api/webhooks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...headers,
-        },
-        body: JSON.stringify(payload),
+      const response = await fetch("/api/stripe/webhook", {
+        method: "GET",
       });
-
-      const data = response.ok ? await response.json() : await response.text();
-
-      logResult(testName, {
-        success: response.ok,
-        data: response.ok ? data : undefined,
-        error: response.ok ? undefined : `${response.status}: ${data}`,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logResult(testName, {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-      });
+      const result = await response.json();
+      console.log("Webhook endpoint test:", result);
+      setTestResult(result);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to test webhook endpoint"
+      );
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const testHealthCheck = async () => {
-    setLoading((prev) => ({ ...prev, health: true }));
-
-    try {
-      const response = await fetch("/api/webhooks");
-      const data = await response.json();
-
-      logResult("health", {
-        success: response.ok,
-        data,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logResult("health", {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
-      });
-    }
-  };
-
-  const testCustomPayload = async () => {
-    if (!customPayload.trim()) {
-      alert("Please enter a custom payload");
-      return;
-    }
-
-    try {
-      const payload = JSON.parse(customPayload);
-      await testWebhookEndpoint("custom", payload);
-    } catch (error) {
-      logResult("custom", {
-        success: false,
-        error: "Invalid JSON payload",
-        timestamp: new Date().toISOString(),
-      });
-    }
-  };
-
-  const clearResults = () => {
-    setResults({});
   };
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Webhooks API Test Page</h1>
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Stripe Webhooks Testing</h1>
 
       <div className="space-y-6">
-        {/* Health Check */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Health Check</h2>
-          <Button
-            onClick={testHealthCheck}
-            disabled={loading.health}
-            className="mr-4"
+        {/* Webhook Endpoint Test */}
+        <div className="border rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4">Test Webhook Endpoint</h2>
+          <button
+            onClick={testWebhookEndpoint}
+            disabled={isLoading}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
           >
-            {loading.health ? "Testing..." : "Test Health Check"}
-          </Button>
-        </Card>
+            {isLoading ? "Testing..." : "Test GET /api/stripe/webhook"}
+          </button>
+        </div>
 
-        {/* Stripe Webhook Events */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Stripe Webhook Events</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button
-              onClick={() =>
-                testWebhookEndpoint(
-                  "checkout_completed",
-                  sampleWebhookPayloads.checkout_session_completed
-                )
-              }
-              disabled={loading.checkout_completed}
-              variant="outline"
-            >
-              {loading.checkout_completed
-                ? "Testing..."
-                : "Checkout Session Completed"}
-            </Button>
-
-            <Button
-              onClick={() =>
-                testWebhookEndpoint(
-                  "payment_succeeded",
-                  sampleWebhookPayloads.payment_intent_succeeded
-                )
-              }
-              disabled={loading.payment_succeeded}
-              variant="outline"
-            >
-              {loading.payment_succeeded
-                ? "Testing..."
-                : "Payment Intent Succeeded"}
-            </Button>
-
-            <Button
-              onClick={() =>
-                testWebhookEndpoint(
-                  "payment_failed",
-                  sampleWebhookPayloads.payment_intent_failed
-                )
-              }
-              disabled={loading.payment_failed}
-              variant="outline"
-            >
-              {loading.payment_failed ? "Testing..." : "Payment Intent Failed"}
-            </Button>
-
-            <Button
-              onClick={() =>
-                testWebhookEndpoint(
-                  "account_updated",
-                  sampleWebhookPayloads.account_updated
-                )
-              }
-              disabled={loading.account_updated}
-              variant="outline"
-            >
-              {loading.account_updated ? "Testing..." : "Account Updated"}
-            </Button>
-          </div>
-        </Card>
-
-        {/* Custom Payload Testing */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Custom Webhook Payload</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="customPayload">Custom JSON Payload</Label>
-              <Textarea
-                id="customPayload"
-                value={customPayload}
-                onChange={(e) => setCustomPayload(e.target.value)}
-                placeholder='{"id": "evt_test", "type": "test.event", "data": {"object": {...}}}'
-                rows={6}
-                className="font-mono"
-              />
-            </div>
-            <Button
-              onClick={testCustomPayload}
-              disabled={loading.custom}
-              variant="outline"
-            >
-              {loading.custom ? "Testing..." : "Test Custom Payload"}
-            </Button>
-          </div>
-        </Card>
-
-        {/* Results */}
-        <Card className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Test Results</h2>
-            <Button onClick={clearResults} variant="outline" size="sm">
-              Clear Results
-            </Button>
-          </div>
-
-          {Object.keys(results).length === 0 ? (
-            <p className="text-gray-500">No tests run yet</p>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(results).map(([testName, result]) => (
-                <div
-                  key={testName}
-                  className={`p-4 rounded-lg border ${
-                    result.success
-                      ? "border-green-200 bg-green-50"
-                      : "border-red-200 bg-red-50"
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold capitalize">
-                      {testName.replace("_", " ")}
-                    </h3>
-                    <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        result.success
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {result.success ? "SUCCESS" : "ERROR"}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {result.timestamp}
-                  </p>
-                  {result.error && (
-                    <p className="text-red-600 text-sm mb-2">{result.error}</p>
-                  )}
-                  {result.data && (
-                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                      {JSON.stringify(result.data, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Sample Payloads Reference */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Sample Webhook Payloads
+        {/* Webhook Configuration Guide */}
+        <div className="border rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4">
+            Configure Connect Webhooks in Stripe
           </h2>
           <div className="space-y-4">
-            {Object.entries(sampleWebhookPayloads).map(
-              ([eventType, payload]) => (
-                <div key={eventType}>
-                  <h3 className="font-medium mb-2 capitalize">
-                    {eventType.replace("_", " ")}
-                  </h3>
-                  <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                    {JSON.stringify(payload, null, 2)}
-                  </pre>
-                </div>
-              )
-            )}
+            <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
+              <h3 className="font-medium text-yellow-800 mb-2">
+                🔧 Setup Instructions
+              </h3>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-yellow-700">
+                <li>
+                  Go to{" "}
+                  <a
+                    href="https://dashboard.stripe.com/webhooks"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Stripe Dashboard → Webhooks
+                  </a>
+                </li>
+                <li>
+                  Click <strong>&quot;Create endpoint&quot;</strong>
+                </li>
+                <li>
+                  Set URL to:{" "}
+                  <code className="bg-yellow-100 px-1 rounded">
+                    {typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://yourdomain.com"}
+                    /api/stripe/webhook
+                  </code>
+                </li>
+                <li>
+                  <strong>IMPORTANT:</strong> Under &quot;Listen to&quot;,
+                  select{" "}
+                  <strong>&quot;Events on Connected accounts&quot;</strong> (NOT
+                  &quot;Events on your account&quot;)
+                </li>
+                <li>
+                  Add these events:
+                  <ul className="list-disc list-inside mt-1 ml-4">
+                    <li>
+                      <code>account.updated</code>
+                    </li>
+                    <li>
+                      <code>account.application.deauthorized</code>
+                    </li>
+                    <li>
+                      <code>checkout.session.completed</code>
+                    </li>
+                    <li>
+                      <code>payment_intent.succeeded</code>
+                    </li>
+                    <li>
+                      <code>payment_intent.payment_failed</code>
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  Copy the webhook signing secret to your environment variables
+                </li>
+              </ol>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded border border-blue-200">
+              <h3 className="font-medium text-blue-800 mb-2">
+                📋 Environment Variables Needed
+              </h3>
+              <pre className="text-sm text-blue-700 bg-blue-100 p-2 rounded">
+                {`STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000`}
+              </pre>
+            </div>
+
+            <div className="bg-green-50 p-4 rounded border border-green-200">
+              <h3 className="font-medium text-green-800 mb-2">
+                ✅ Common Issues & Solutions
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-green-700">
+                <li>
+                  <strong>Wrong webhook type:</strong> Must be &quot;Connect
+                  webhook&quot; not &quot;Account webhook&quot;
+                </li>
+                <li>
+                  <strong>Missing HTTPS:</strong> Production webhooks require
+                  HTTPS URLs
+                </li>
+                <li>
+                  <strong>Incorrect URL:</strong> Make sure URL is accessible
+                  and returns 200
+                </li>
+                <li>
+                  <strong>Missing events:</strong> account.updated is critical
+                  for connected account status
+                </li>
+                <li>
+                  <strong>Database verification_status:</strong> Only accepts
+                  &quot;pending&quot;, &quot;verified&quot;, or
+                  &quot;rejected&quot; (enum type)
+                </li>
+              </ul>
+            </div>
           </div>
-        </Card>
+        </div>
+
+        {/* Test Results */}
+        {testResult && (
+          <div className="border rounded-lg p-4">
+            <h2 className="text-lg font-semibold mb-4">Test Results</h2>
+            <pre className="bg-gray-100 p-4 rounded text-sm overflow-auto">
+              {typeof testResult === "string"
+                ? testResult
+                : JSON.stringify(testResult, null, 2)}
+            </pre>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+            <h2 className="text-lg font-semibold text-red-800 mb-2">Error</h2>
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Webhook Testing with Stripe CLI */}
+        <div className="border rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4">Test with Stripe CLI</h2>
+          <div className="bg-gray-50 p-4 rounded">
+            <h3 className="font-medium mb-2">For Connect webhooks:</h3>
+            <pre className="text-sm bg-gray-800 text-green-400 p-2 rounded mb-2">
+              {`# Listen for Connect webhook events
+stripe listen --forward-connect-to localhost:3000/api/stripe/webhook
+
+# In another terminal, trigger a Connect event
+stripe trigger account.updated --stripe-account acct_connected_account_id`}
+            </pre>
+            <p className="text-sm text-gray-600">
+              Note: Use <code>--forward-connect-to</code> for Connect webhooks,
+              not <code>--forward-to</code>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

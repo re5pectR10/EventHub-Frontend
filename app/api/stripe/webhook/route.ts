@@ -174,6 +174,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`Received Stripe webhook: ${event.type}`);
 
+    // Log if this is a Connect event (has account property)
+    if (event.account) {
+      console.log(`Connect event for account: ${event.account}`);
+    } else {
+      console.log(`Platform event (no account property)`);
+    }
+
     const supabaseServer = await getServerSupabaseClient();
 
     // Handle different event types
@@ -185,7 +192,42 @@ export async function POST(request: NextRequest) {
         break;
 
       case "account.updated":
-        await handleAccountUpdated(event.data.object as Stripe.Account);
+        const account = event.data.object as Stripe.Account;
+        console.log(
+          `Account updated: ${account.id}, charges_enabled: ${account.charges_enabled}, payouts_enabled: ${account.payouts_enabled}`
+        );
+        if (account.requirements?.currently_due) {
+          console.log(
+            `Requirements currently due: ${account.requirements.currently_due.join(
+              ", "
+            )}`
+          );
+        }
+        await handleAccountUpdated(account);
+        break;
+
+      case "account.application.deauthorized":
+        const application = event.data.object as Stripe.Application;
+        const connectedAccountId = event.account;
+        console.log(
+          `Account ${connectedAccountId} deauthorized application ${application.id}`
+        );
+
+        // Update organizer status back to rejected (since they disconnected their Stripe account)
+        if (connectedAccountId) {
+          await supabaseServer
+            .from("organizers")
+            .update({
+              verification_status: "rejected",
+              stripe_account_id: null, // Clear the Stripe account ID
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_account_id", connectedAccountId);
+
+          console.log(
+            `Marked organizer with account ${connectedAccountId} as rejected due to deauthorization`
+          );
+        }
         break;
 
       case "payment_intent.succeeded":
