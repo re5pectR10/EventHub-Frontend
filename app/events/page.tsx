@@ -1,394 +1,145 @@
-"use client";
-
-import { EventCard } from "@/components/events/event-card";
+import { Suspense } from "react";
 import { Footer } from "@/components/layout/footer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { useCategories, useEvents } from "@/lib/api";
-import type { EventSearchParams } from "@/lib/types";
-import { Grid, List, Search, SlidersHorizontal } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { EventsClient } from "@/components/events/events-client";
+import { getServerSupabaseClient } from "@/lib/supabase-server";
+import type { Category, Event } from "@/lib/types";
 
-interface FilterState {
-  query: string;
-  category: string;
-  dateFrom: string;
-  dateTo: string;
-  location: string;
-  sort: "date_asc" | "date_desc" | "price_asc" | "price_desc";
+// Enable ISR - revalidate every 30 minutes
+export const revalidate = 1800;
+
+async function getInitialData(): Promise<{
+  events: Event[];
+  categories: Category[];
+  totalEvents: number;
+}> {
+  try {
+    const supabaseServer = await getServerSupabaseClient();
+
+    // Fetch initial events (first page, default sort)
+    const { data: events, error: eventsError } = await supabaseServer
+      .from("events")
+      .select(
+        `
+        *,
+        organizers(id, business_name, contact_email, description, website),
+        event_categories(name, slug),
+        event_images(image_url, alt_text, display_order, is_primary),
+        ticket_types(id, name, price, quantity_available, quantity_sold)
+      `
+      )
+      .eq("status", "published")
+      .order("start_date", { ascending: true })
+      .range(0, 11); // First 12 events
+
+    // Fetch all categories for filtering
+    const { data: categories, error: categoriesError } = await supabaseServer
+      .from("event_categories")
+      .select("*")
+      .order("name", { ascending: true });
+
+    // Get total count of published events
+    const { count: totalEvents, error: countError } = await supabaseServer
+      .from("events")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "published");
+
+    if (eventsError) {
+      console.error("Events fetch error:", eventsError);
+    }
+    if (categoriesError) {
+      console.error("Categories fetch error:", categoriesError);
+    }
+    if (countError) {
+      console.error("Count fetch error:", countError);
+    }
+
+    return {
+      events: events || [],
+      categories: categories || [],
+      totalEvents: totalEvents || 0,
+    };
+  } catch (error) {
+    console.error("Data fetch error:", error);
+    return {
+      events: [],
+      categories: [],
+      totalEvents: 0,
+    };
+  }
 }
 
-function EventsContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
+export async function generateMetadata() {
+  const { events, categories } = await getInitialData();
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const categoryNames = categories
+    .slice(0, 5)
+    .map((cat) => cat.name)
+    .join(", ");
 
-  const [filters, setFilters] = useState<FilterState>({
-    query: searchParams.get("q") || "",
-    category: searchParams.get("category") || "",
-    dateFrom: searchParams.get("dateFrom") || "",
-    dateTo: searchParams.get("dateTo") || "",
-    location: searchParams.get("location") || "",
-    sort: (searchParams.get("sort") as FilterState["sort"]) || "date_asc",
-  });
-
-  // Build search params for React Query
-  const eventSearchParams: EventSearchParams = {
-    page: currentPage,
-    limit: 12,
-    ...(filters.query && { query: filters.query }),
-    ...(filters.category && { category: filters.category }),
-    ...(filters.dateFrom && { date_from: filters.dateFrom }),
-    ...(filters.dateTo && { date_to: filters.dateTo }),
-    ...(filters.location && { location: filters.location }),
-    sort: filters.sort,
+  return {
+    title: "Local Events | Discover Amazing Events Near You",
+    description: `Discover ${events.length}+ local events. Browse ${categories.length} categories including ${categoryNames}. Find concerts, workshops, sports events, and more.`,
+    keywords:
+      "local events, activities, concerts, workshops, sports events, community events, entertainment",
+    openGraph: {
+      title: "Local Events | Discover Amazing Events Near You",
+      description: `Discover ${events.length}+ local events across ${categories.length} categories.`,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Local Events | Discover Amazing Events Near You",
+      description: `Discover ${events.length}+ local events across ${categories.length} categories.`,
+    },
   };
+}
 
-  // React Query hooks
-  const {
-    data: eventsData,
-    isLoading: loading,
-    error: eventsError,
-  } = useEvents(eventSearchParams);
-
-  const {
-    data: categories = [],
-    isLoading: categoriesLoading,
-    error: categoriesError,
-  } = useCategories();
-
-  const events = eventsData?.events || [];
-  const totalPages = eventsData?.pagination?.pages || 1;
-  const error = eventsError?.message || categoriesError?.message || null;
-
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.query) params.set("q", filters.query);
-    if (filters.category) params.set("category", filters.category);
-    if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-    if (filters.dateTo) params.set("dateTo", filters.dateTo);
-    if (filters.location) params.set("location", filters.location);
-    if (filters.sort !== "date_asc") params.set("sort", filters.sort);
-
-    const queryString = params.toString();
-    router.push(`/events${queryString ? `?${queryString}` : ""}`, {
-      scroll: false,
-    });
-  }, [filters, router]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateURL();
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [updateURL]);
-
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-    setCurrentPage(1);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      query: "",
-      category: "",
-      dateFrom: "",
-      dateTo: "",
-      location: "",
-      sort: "date_asc",
-    });
-    setCurrentPage(1);
-  };
-
-  const hasActiveFilters = Boolean(
-    filters.query ||
-      filters.category ||
-      filters.dateFrom ||
-      filters.dateTo ||
-      filters.location ||
-      filters.sort !== "date_asc"
-  );
-
+function EventsLoading() {
   return (
     <div className="min-h-screen flex flex-col">
       <main className="flex-1">
-        {/* Hero Section */}
+        {/* Hero Section Skeleton */}
         <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12">
           <div className="container-clean">
             <div className="max-w-3xl mx-auto text-center">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                Discover Local Events
-              </h1>
-              <p className="text-lg text-gray-600 mb-8">
-                Find amazing events and activities happening in your area
-              </p>
-
-              {/* Main Search */}
-              <div className="relative max-w-2xl mx-auto">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  type="text"
-                  placeholder="Search events, activities, or keywords..."
-                  value={filters.query}
-                  onChange={(e) => handleFilterChange("query", e.target.value)}
-                  className="pl-10 pr-4 py-3 text-lg"
-                />
-              </div>
+              <div className="h-10 bg-gray-200 rounded w-80 mx-auto mb-4 animate-pulse"></div>
+              <div className="h-6 bg-gray-200 rounded w-96 mx-auto mb-8 animate-pulse"></div>
+              <div className="h-12 bg-gray-200 rounded w-full max-w-2xl mx-auto animate-pulse"></div>
             </div>
           </div>
         </section>
 
-        {/* Filters and Controls */}
-        <section className="border-b bg-white sticky top-16 z-40">
-          <div className="container-clean py-4">
+        {/* Controls Skeleton */}
+        <section className="border-b bg-white py-4">
+          <div className="container-clean">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="flex items-center gap-2"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  Filters
-                  {hasActiveFilters && (
-                    <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">
-                      Active
-                    </span>
-                  )}
-                </Button>
-
-                {hasActiveFilters && (
-                  <Button variant="ghost" onClick={clearFilters} size="sm">
-                    Clear all
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex items-center gap-2">
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <Grid className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "list" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("list")}
-                  >
-                    <List className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <select
-                  value={filters.sort}
-                  onChange={(e) => handleFilterChange("sort", e.target.value)}
-                  className="px-3 py-2 border border-input rounded-md text-sm bg-background"
-                >
-                  <option value="date_asc">Date: Earliest first</option>
-                  <option value="date_desc">Date: Latest first</option>
-                  <option value="price_asc">Price: Low to high</option>
-                  <option value="price_desc">Price: High to low</option>
-                </select>
-              </div>
+              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded w-48 animate-pulse"></div>
             </div>
-
-            {/* Advanced Filters */}
-            {showFilters && (
-              <Card className="p-4">
-                <CardContent className="p-0">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Category Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Category
-                      </label>
-                      <select
-                        value={filters.category}
-                        onChange={(e) =>
-                          handleFilterChange("category", e.target.value)
-                        }
-                        className="w-full px-3 py-2 border border-input rounded-md text-sm bg-background"
-                        disabled={categoriesLoading}
-                      >
-                        <option value="">All Categories</option>
-                        {categories.map((category: any) => (
-                          <option key={category.id} value={category.slug}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Date From */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        From Date
-                      </label>
-                      <Input
-                        type="date"
-                        value={filters.dateFrom}
-                        onChange={(e) =>
-                          handleFilterChange("dateFrom", e.target.value)
-                        }
-                        className="text-sm"
-                      />
-                    </div>
-
-                    {/* Date To */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        To Date
-                      </label>
-                      <Input
-                        type="date"
-                        value={filters.dateTo}
-                        onChange={(e) =>
-                          handleFilterChange("dateTo", e.target.value)
-                        }
-                        className="text-sm"
-                      />
-                    </div>
-
-                    {/* Location */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Location
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="City or venue"
-                        value={filters.location}
-                        onChange={(e) =>
-                          handleFilterChange("location", e.target.value)
-                        }
-                        className="text-sm"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </section>
 
-        {/* Results */}
+        {/* Events Grid Skeleton */}
         <section className="py-8">
           <div className="container-clean">
-            {error ? (
-              <div className="text-center py-12">
-                <p className="text-red-600 mb-4">Failed to load events</p>
-                <p className="text-gray-600">{error}</p>
-              </div>
-            ) : loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="border rounded-lg overflow-hidden animate-pulse"
-                  >
-                    <div className="bg-gray-200 h-48"></div>
-                    <div className="p-4">
-                      <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded mb-2 w-2/3"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : events.length === 0 ? (
-              <div className="text-center py-12">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  No events found
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Try adjusting your search or filters to find more events.
-                </p>
-                {hasActiveFilters && (
-                  <Button onClick={clearFilters}>Clear Filters</Button>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-6">
-                  <p className="text-gray-600">
-                    Found {eventsData?.pagination?.total || events.length}{" "}
-                    events
-                  </p>
-                </div>
-
+            <div className="mb-6">
+              <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
                 <div
-                  className={
-                    viewMode === "grid"
-                      ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                      : "space-y-4"
-                  }
+                  key={i}
+                  className="border rounded-lg overflow-hidden animate-pulse"
                 >
-                  {events.map((event: any) => (
-                    <EventCard key={event.id} event={event} />
-                  ))}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center mt-12">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setCurrentPage(Math.max(1, currentPage - 1))
-                        }
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </Button>
-
-                      <div className="flex gap-1">
-                        {Array.from(
-                          { length: Math.min(5, totalPages) },
-                          (_, i) => {
-                            const page = i + 1;
-                            return (
-                              <Button
-                                key={page}
-                                variant={
-                                  currentPage === page ? "default" : "outline"
-                                }
-                                size="sm"
-                                onClick={() => setCurrentPage(page)}
-                              >
-                                {page}
-                              </Button>
-                            );
-                          }
-                        )}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setCurrentPage(Math.min(totalPages, currentPage + 1))
-                        }
-                        disabled={currentPage === totalPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
+                  <div className="bg-gray-200 h-48"></div>
+                  <div className="p-4">
+                    <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded mb-2 w-2/3"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
                   </div>
-                )}
-              </>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       </main>
@@ -397,19 +148,21 @@ function EventsContent() {
   );
 }
 
-export default function EventsPage() {
+export default async function EventsPage() {
+  const { events, categories, totalEvents } = await getInitialData();
+
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading events...</p>
-          </div>
-        </div>
-      }
-    >
-      <EventsContent />
-    </Suspense>
+    <div className="min-h-screen flex flex-col">
+      <main className="flex-1">
+        <Suspense fallback={<EventsLoading />}>
+          <EventsClient
+            initialEvents={events}
+            initialCategories={categories}
+            totalInitialEvents={totalEvents}
+          />
+        </Suspense>
+      </main>
+      <Footer />
+    </div>
   );
 }

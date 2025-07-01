@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSupabaseClient } from "@/lib/supabase-server";
 
-// Force dynamic rendering to prevent caching issues
+// Keep dynamic for client-side filtering and real-time updates
 export const dynamic = "force-dynamic";
 
 export async function GET() {
