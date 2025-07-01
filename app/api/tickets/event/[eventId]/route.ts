@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSupabaseClient } from "../../../../../lib/supabase-server";
+import { getServerSupabaseClient } from "@/lib/supabase-server";
 
 // Get ticket types for an event
 export async function GET(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSupabaseClient } from "../../../lib/supabase-server";
+import { getServerSupabaseClient } from "@/lib/supabase-server";
 
 // GET /api/organizers - Get all organizers (public)
 export async function GET(request: NextRequest) {

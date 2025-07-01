@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
-} from "../../../../lib/supabase-server";
+} from "@/lib/supabase-server";
 
 // Helper function to check if user is organizer
 async function getOrganizer(userId: string, supabaseServer: any) {

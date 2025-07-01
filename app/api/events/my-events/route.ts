@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
-} from "../../../../lib/supabase-server";
+} from "@/lib/supabase-server";
 
 // GET /api/events/my-events - Get events created by the authenticated organizer
 export async function GET(request: NextRequest) {

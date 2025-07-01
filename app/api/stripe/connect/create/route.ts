@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import {
   getServerSupabaseClient,
   getUserFromToken,
-} from "../../../../../lib/supabase-server";
+} from "@/lib/supabase-server";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

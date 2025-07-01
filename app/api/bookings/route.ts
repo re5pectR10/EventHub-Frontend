@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
-} from "../../../lib/supabase-server";
+} from "@/lib/supabase-server";
 
 interface BookingItemRequest {
   ticket_type_id: string;

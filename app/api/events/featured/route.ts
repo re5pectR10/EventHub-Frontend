@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSupabaseClient } from "../../../../lib/supabase-server";
+import { getServerSupabaseClient } from "@/lib/supabase-server";
 
 // GET /api/events/featured - Get featured events
 export async function GET(request: NextRequest) {

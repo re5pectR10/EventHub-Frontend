@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
-} from "../../../../lib/supabase-server";
+} from "@/lib/supabase-server";
 
 // GET /api/organizers/profile - Get organizer profile for authenticated user
 export async function GET(request: NextRequest) {
