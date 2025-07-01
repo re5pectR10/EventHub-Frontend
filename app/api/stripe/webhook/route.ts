@@ -17,7 +17,7 @@ function generateTicketCode(): string {
 function generateQRCode(ticketCode: string): string {
   // In a real implementation, you'd generate a proper QR code
   // For now, we'll just return a placeholder URL
-  return `${process.env.NEXT_PUBLIC_FRONTEND_URL}/verify-ticket/${ticketCode}`;
+  return `${process.env.NEXT_PUBLIC_DOMAIN}/verify-ticket/${ticketCode}`;
 }
 
 // Handle successful checkout

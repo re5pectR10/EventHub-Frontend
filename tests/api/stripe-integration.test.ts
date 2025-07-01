@@ -110,7 +110,7 @@ describe("Stripe API Integration Tests", () => {
     vi.clearAllMocks();
     // Reset environment variables to test defaults
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_mock";
-    process.env.NEXT_PUBLIC_FRONTEND_URL = "http://localhost:3000";
+    process.env.NEXT_PUBLIC_DOMAIN = "http://localhost:3000";
 
     // Reset mock data
     mockUserFromToken = null;

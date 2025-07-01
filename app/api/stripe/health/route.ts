@@ -8,7 +8,7 @@ export async function GET() {
     environment: {
       supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       stripe_configured: !!process.env.STRIPE_SECRET_KEY,
-      frontend_url: !!process.env.NEXT_PUBLIC_FRONTEND_URL,
+      frontend_url: !!process.env.NEXT_PUBLIC_DOMAIN,
     },
   });
 }
