@@ -1,14 +1,14 @@
-import { createClient } from "@/utils/supabase/client";
 import type {
-  Event,
-  Category,
-  Organizer,
-  Booking,
-  EventSearchParams,
   ApiResponse,
+  Booking,
+  Category,
+  Event,
+  EventSearchParams,
+  Organizer,
   TicketType,
 } from "@/lib/types";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/utils/supabase/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -199,10 +199,16 @@ class ApiService {
 
   async getEvent(id: string): Promise<ApiResponse<Event>> {
     try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
       const response = await fetch(`/api/events/${id}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
       });
 
