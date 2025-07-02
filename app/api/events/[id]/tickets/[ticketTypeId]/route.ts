@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { NextRequest, NextResponse } from "next/server";
 
 // Type for ticket type with nested event and organizer data
 // Note: Supabase returns nested relations as arrays even with .single()
@@ -33,9 +33,24 @@ interface TicketTypeUpdateRequest {
   price?: number;
   quantity_available?: number;
   max_per_order?: number;
-  sale_start_date?: string;
-  sale_end_date?: string;
+  sale_start_date?: string | null;
+  sale_end_date?: string | null;
   is_active?: boolean;
+}
+
+// Helper function to sanitize timestamp fields for updates
+function sanitizeUpdateTimestampFields(data: TicketTypeUpdateRequest) {
+  const sanitized = { ...data };
+
+  // Convert empty strings to null for timestamp fields
+  if ("sale_start_date" in sanitized) {
+    sanitized.sale_start_date = sanitized.sale_start_date?.trim() || null;
+  }
+  if ("sale_end_date" in sanitized) {
+    sanitized.sale_end_date = sanitized.sale_end_date?.trim() || null;
+  }
+
+  return sanitized;
 }
 
 // GET /api/events/[id]/tickets/[ticketTypeId] - Get single ticket type for an event
@@ -92,7 +107,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updateData: TicketTypeUpdateRequest = await request.json();
+    const rawUpdateData: TicketTypeUpdateRequest = await request.json();
+    const updateData = sanitizeUpdateTimestampFields(rawUpdateData);
     const supabaseServer = await getServerSupabaseClient();
 
     // Check if user owns this event and ticket type belongs to the event

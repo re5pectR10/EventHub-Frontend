@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,11 +10,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DashboardNav } from "@/components/layout/dashboard-nav";
+import { useCategories, useCreateEvent } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import type { EventFormData, TicketTypeFormData } from "@/lib/types";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCategories, useCreateEvent } from "@/lib/api";
-import type { EventFormData, TicketTypeFormData } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // Alias for local usage
 type Event = EventFormData;
@@ -73,8 +73,8 @@ export default function CreateEventPage() {
       description: "",
       price: 0,
       quantity_available: 100,
-      sale_start_date: "",
-      sale_end_date: "",
+      sale_start_date: undefined,
+      sale_end_date: undefined,
       max_per_order: 10,
     };
     setTicketTypes([...ticketTypes, newTicket]);
@@ -174,9 +174,16 @@ export default function CreateEventPage() {
     }
 
     try {
+      // Sanitize ticket data - convert empty strings to undefined for optional date fields
+      const sanitizedTickets = ticketTypes.map((ticket) => ({
+        ...ticket,
+        sale_start_date: ticket.sale_start_date?.trim() || undefined,
+        sale_end_date: ticket.sale_end_date?.trim() || undefined,
+      }));
+
       const response = await createEventMutation.mutateAsync({
         eventData: event,
-        tickets: ticketTypes,
+        tickets: sanitizedTickets,
       });
 
       if (response.error) {

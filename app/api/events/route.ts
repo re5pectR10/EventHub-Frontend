@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { NextRequest, NextResponse } from "next/server";
 
 // Generate URL-friendly slug from title
 function generateSlug(title: string): string {
@@ -40,6 +40,23 @@ async function generateUniqueSlug(
     slug = `${baseSlug}-${counter}`;
     counter++;
   }
+}
+
+// Helper function to sanitize timestamp fields
+function sanitizeTicketTimestampFields(ticket: {
+  name: string;
+  description?: string;
+  price: number;
+  quantity_available: number;
+  sale_start_date?: string;
+  sale_end_date?: string;
+  max_per_order?: number;
+}) {
+  return {
+    ...ticket,
+    sale_start_date: ticket.sale_start_date?.trim() || null,
+    sale_end_date: ticket.sale_end_date?.trim() || null,
+  };
 }
 
 // Get all events with search and filtering
@@ -221,14 +238,17 @@ export async function POST(request: NextRequest) {
           sale_start_date?: string;
           sale_end_date?: string;
           max_per_order?: number;
-        }) => ({
-          ...ticket,
-          event_id: event.id,
-          quantity_sold: 0,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        }) => {
+          const sanitizedTicket = sanitizeTicketTimestampFields(ticket);
+          return {
+            ...sanitizedTicket,
+            event_id: event.id,
+            quantity_sold: 0,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+        }
       );
 
       const { data: ticketData, error: ticketError } = await supabaseServer

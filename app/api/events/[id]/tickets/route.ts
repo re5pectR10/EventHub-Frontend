@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { NextRequest, NextResponse } from "next/server";
 
 interface RouteParams {
   params: Promise<{
@@ -16,6 +16,17 @@ interface TicketTypeRequest {
   price: number;
   quantity_available: number;
   max_per_order?: number;
+  sale_start_date?: string;
+  sale_end_date?: string;
+}
+
+// Helper function to sanitize timestamp fields
+function sanitizeTimestampFields(data: TicketTypeRequest) {
+  return {
+    ...data,
+    sale_start_date: data.sale_start_date?.trim() || null,
+    sale_end_date: data.sale_end_date?.trim() || null,
+  };
 }
 
 // GET /api/events/[id]/tickets - Get ticket types for an event
@@ -62,7 +73,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const ticketData: TicketTypeRequest = await request.json();
+    const rawTicketData: TicketTypeRequest = await request.json();
+    const ticketData = sanitizeTimestampFields(rawTicketData);
 
     const supabaseServer = await getServerSupabaseClient();
 

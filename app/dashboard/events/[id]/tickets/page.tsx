@@ -1,21 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
-  useTicketsByEvent,
-  useCreateTicket,
-  useUpdateTicket,
-  useDeleteTicket,
-} from "@/lib/api";
-import { TicketType } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, ArrowLeft } from "lucide-react";
+import {
+  useCreateTicket,
+  useDeleteTicket,
+  useTicketsByEvent,
+  useUpdateTicket,
+} from "@/lib/api";
+import { TicketType } from "@/lib/types";
+import { ArrowLeft, Edit, Plus, Trash2 } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface TicketFormData {
   name: string;
@@ -74,18 +74,25 @@ export default function TicketManagementPage() {
     e.preventDefault();
 
     try {
+      // Sanitize form data - convert empty strings to undefined for optional date fields
+      const sanitizedFormData = {
+        ...formData,
+        sale_start_date: formData.sale_start_date?.trim() || undefined,
+        sale_end_date: formData.sale_end_date?.trim() || undefined,
+      };
+
       if (editingTicket) {
         // Update existing ticket
         await updateTicketMutation.mutateAsync({
           eventId: eventId,
           ticketTypeId: editingTicket.id,
-          ticketData: formData,
+          ticketData: sanitizedFormData,
         });
         alert("Ticket updated successfully!");
       } else {
         // Create new ticket
         await createTicketMutation.mutateAsync({
-          ...formData,
+          ...sanitizedFormData,
           event_id: eventId,
         });
         alert("Ticket created successfully!");
