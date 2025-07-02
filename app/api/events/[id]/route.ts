@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
 import { Database } from "@/lib/types";
+import { NextRequest, NextResponse } from "next/server";
 
 // Type for the complete event with all nested relations as returned by our Supabase query
 interface EventWithAllRelations {
@@ -119,6 +119,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Type the event as EventWithAllRelations for better type safety
     const typedEvent = event as EventWithAllRelations;
 
+    console.log(typedEvent);
     // Check if user is authenticated and is the organizer of this event
     if (user && typedEvent.organizers?.[0]?.user_id === user.id) {
       console.log(
