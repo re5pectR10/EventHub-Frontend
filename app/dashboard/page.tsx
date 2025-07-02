@@ -1,11 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/lib/auth";
-import { useDashboardStats } from "@/lib/api";
-import { Event, Booking } from "@/lib/types";
+import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,8 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CalendarIcon, UsersIcon, TicketIcon, PlusIcon } from "lucide-react";
-import { DashboardNav } from "@/components/layout/dashboard-nav";
+import { useDashboardStats } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Booking, Event } from "@/lib/types";
+import { CalendarIcon, PlusIcon, TicketIcon, UsersIcon } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -158,7 +158,7 @@ export default function DashboardPage() {
                           {event.start_time}
                         </p>
                       </div>
-                      <Link href={`/dashboard/events/${event.id}`}>
+                      <Link href={`/events/${event.slug}`}>
                         <Button variant="outline" size="sm">
                           View
                         </Button>
