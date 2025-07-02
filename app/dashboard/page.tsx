@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 import { useDashboardStats } from "@/lib/api";
+import { Event, Booking } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -53,7 +54,7 @@ export default function DashboardPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="mt-2 text-gray-600">
-            Welcome back! Here's what's happening with your events.
+            Welcome back! Here&apos;s what&apos;s happening with your events.
           </p>
         </div>
 
@@ -145,7 +146,7 @@ export default function DashboardPage() {
             <CardContent>
               {stats?.upcomingEvents?.length ? (
                 <div className="space-y-4">
-                  {stats.upcomingEvents.map((event: any) => (
+                  {stats.upcomingEvents.map((event: Event) => (
                     <div
                       key={event.id}
                       className="flex items-center justify-between p-3 border rounded-lg"
@@ -180,7 +181,7 @@ export default function DashboardPage() {
             <CardContent>
               {stats?.recentBookings?.length ? (
                 <div className="space-y-4">
-                  {stats.recentBookings.map((booking: any) => (
+                  {stats.recentBookings.map((booking: Booking) => (
                     <div
                       key={booking.id}
                       className="flex items-center justify-between p-3 border rounded-lg"

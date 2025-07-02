@@ -8,6 +8,7 @@ import {
   useUpdateTicket,
   useDeleteTicket,
 } from "@/lib/api";
+import { TicketType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ export default function TicketManagementPage() {
   const eventId = params?.id as string;
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState<any>(null);
+  const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
   const [formData, setFormData] = useState<TicketFormData>({
     name: "",
     description: "",
@@ -76,11 +77,9 @@ export default function TicketManagementPage() {
       if (editingTicket) {
         // Update existing ticket
         await updateTicketMutation.mutateAsync({
-          id: editingTicket.id,
-          ticketData: {
-            ...formData,
-            event_id: eventId,
-          },
+          eventId: eventId,
+          ticketTypeId: editingTicket.id,
+          ticketData: formData,
         });
         alert("Ticket updated successfully!");
       } else {
@@ -94,12 +93,14 @@ export default function TicketManagementPage() {
 
       resetForm();
       await refetchTickets();
-    } catch (error: any) {
-      alert(error.message || "Failed to save ticket");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save ticket";
+      alert(errorMessage);
     }
   };
 
-  const handleEdit = (ticket: any) => {
+  const handleEdit = (ticket: TicketType) => {
     setEditingTicket(ticket);
     setFormData({
       name: ticket.name,
@@ -120,13 +121,15 @@ export default function TicketManagementPage() {
 
     try {
       await deleteTicketMutation.mutateAsync({
-        id: ticketId,
         eventId,
+        ticketTypeId: ticketId,
       });
       alert("Ticket deleted successfully!");
       await refetchTickets();
-    } catch (error: any) {
-      alert(error.message || "Failed to delete ticket");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to delete ticket";
+      alert(errorMessage);
     }
   };
 

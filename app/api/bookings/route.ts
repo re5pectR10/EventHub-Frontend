@@ -17,32 +17,6 @@ interface CreateBookingRequest {
   customer_phone?: string;
 }
 
-// Helper function to check if user is organizer
-async function getOrganizer(userId: string) {
-  try {
-    const supabaseServer = await getServerSupabaseClient();
-    const { data: organizer, error } = await supabaseServer
-      .from("organizers")
-      .select("id")
-      .eq("user_id", userId)
-      .single();
-
-    if (error) {
-      if (error.code === "PGRST116") {
-        // No organizer found - this is normal
-        return null;
-      }
-      console.error("Error getting organizer:", error);
-      return null;
-    }
-
-    return organizer;
-  } catch (err) {
-    console.error("Exception in getOrganizer:", err);
-    return null;
-  }
-}
-
 // GET /api/bookings - Get user's bookings
 export async function GET(request: NextRequest) {
   try {

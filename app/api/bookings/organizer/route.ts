@@ -3,9 +3,17 @@ import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { SupabaseClient } from "@supabase/supabase-js";
+import { Database } from "@/lib/types";
 
-// Helper function to check if user is organizer
-async function getOrganizer(userId: string, supabaseServer: any) {
+// Type for Supabase client
+type SupabaseServerClient = SupabaseClient<Database>;
+
+// Helper function to check if user is organizer - now properly typed
+async function getOrganizer(
+  userId: string,
+  supabaseServer: SupabaseServerClient
+) {
   try {
     const { data: organizer, error } = await supabaseServer
       .from("organizers")

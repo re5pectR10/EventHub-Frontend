@@ -4,6 +4,15 @@ import {
   getUserFromToken,
 } from "@/lib/supabase-server";
 
+// Type for event with nested organizer data
+// Note: Supabase returns nested relations as arrays even with .single()
+interface EventWithOrganizer {
+  organizer_id: string;
+  organizers: {
+    user_id: string;
+  }[];
+}
+
 interface RouteParams {
   params: Promise<{
     id: string;
@@ -46,8 +55,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    // Verify ownership
-    if ((event.organizers as any)?.user_id !== user.id) {
+    // Verify ownership - now properly typed
+    const typedEvent = event as EventWithOrganizer;
+    if (typedEvent.organizers?.[0]?.user_id !== user.id) {
       return NextResponse.json(
         { error: "You don't have permission to update this event" },
         { status: 403 }

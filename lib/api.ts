@@ -48,6 +48,39 @@ export const QUERY_KEYS = {
   },
 } as const;
 
+// Stripe types
+interface StripeRequirements {
+  currently_due?: string[];
+  eventually_due?: string[];
+  past_due?: string[];
+  pending_verification?: string[];
+  disabled_reason?: string;
+}
+
+// Booking creation data
+interface CreateBookingData {
+  event_id: string;
+  items: Array<{
+    ticket_type_id: string;
+    quantity: number;
+  }>;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+}
+
+// Ticket creation data
+interface CreateTicketData {
+  event_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  quantity_available: number;
+  sale_start_date?: string;
+  sale_end_date?: string;
+  max_per_order?: number;
+}
+
 class ApiService {
   private supabase = createClient();
 
@@ -545,7 +578,7 @@ class ApiService {
       verification_status?: string;
       charges_enabled?: boolean;
       payouts_enabled?: boolean;
-      requirements?: any;
+      requirements?: StripeRequirements;
     }>
   > {
     try {
@@ -1306,10 +1339,10 @@ export function useDashboardStats() {
 
         // Calculate stats
         const upcomingEvents = events.filter(
-          (event: any) => new Date(event.start_date) > new Date()
+          (event: Event) => new Date(event.start_date) > new Date()
         );
         const totalRevenue = bookings.reduce(
-          (sum: number, booking: any) => sum + (booking.total_price || 0),
+          (sum: number, booking: Booking) => sum + (booking.total_price || 0),
           0
         );
 
@@ -1440,7 +1473,8 @@ export function useCreateBooking() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (bookingData: any) => apiService.createBooking(bookingData),
+    mutationFn: (bookingData: CreateBookingData) =>
+      apiService.createBooking(bookingData),
     onSuccess: () => {
       // Invalidate and refetch bookings
       queryClient.invalidateQueries({
@@ -1477,7 +1511,8 @@ export function useCreateTicket() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (ticketData: any) => apiService.createTicketType(ticketData),
+    mutationFn: (ticketData: CreateTicketData) =>
+      apiService.createTicketType(ticketData),
     onSuccess: (data, variables) => {
       // Invalidate tickets for the specific event
       if (variables.event_id) {

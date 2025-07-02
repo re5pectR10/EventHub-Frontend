@@ -24,22 +24,20 @@ import {
   useUpdateTicket,
   useDeleteTicket,
 } from "@/lib/api";
-import type { EventFormData, TicketTypeFormData } from "@/lib/types";
+import type { Event, EventFormData, TicketTypeFormData } from "@/lib/types";
 
-// Alias for local usage
-type Event = EventFormData;
-type TicketType = TicketTypeFormData & { id?: string };
-
-// Interface for event data from API
-interface EventWithMeta extends EventFormData {
-  id?: string;
-  slug?: string;
-  created_at?: string;
-  updated_at?: string;
+// Interface for event data from API that includes all necessary properties
+interface EventWithFormData extends Event {
+  category_id: string;
+  capacity: number;
 }
 
+// Alias for local usage
+type EditableEvent = EventFormData;
+type TicketType = TicketTypeFormData & { id?: string };
+
 export default function EditEventPage() {
-  const [event, setEvent] = useState<Event>({
+  const [event, setEvent] = useState<EditableEvent>({
     title: "",
     description: "",
     start_date: "",
@@ -107,6 +105,9 @@ export default function EditEventPage() {
   // Update form data when event data is loaded
   useEffect(() => {
     if (eventData) {
+      // Type the eventData properly - it should have category_id from the database
+      const typedEventData = eventData as EventWithFormData;
+
       setEvent({
         title: eventData.title || "",
         description: eventData.description || "",
@@ -116,8 +117,8 @@ export default function EditEventPage() {
         end_time: eventData.end_time || "",
         location_name: eventData.location_name || "",
         location_address: eventData.location_address || "",
-        category_id: (eventData as any).category_id || "",
-        capacity: (eventData as any).capacity || 100,
+        category_id: typedEventData.category_id || "",
+        capacity: typedEventData.capacity || 100,
         featured: eventData.featured || false,
         status: eventData.status || "draft",
       });
@@ -310,7 +311,7 @@ export default function EditEventPage() {
   };
 
   const handleInputChange = (
-    field: keyof Event,
+    field: keyof EditableEvent,
     value: string | number | boolean
   ) => {
     setEvent((prev) => ({ ...prev, [field]: value }));

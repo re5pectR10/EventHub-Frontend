@@ -13,6 +13,40 @@ interface CheckoutRequest {
   cancel_url?: string;
 }
 
+// Type definitions for the Supabase query response
+interface TicketType {
+  name: string;
+  description: string | null;
+}
+
+interface BookingItem {
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  ticket_types: TicketType;
+}
+
+interface Organizer {
+  business_name: string;
+  stripe_account_id: string | null;
+}
+
+interface Event {
+  id: string;
+  title: string;
+  organizer_id: string;
+  organizers: Organizer;
+}
+
+interface BookingWithRelations {
+  id: string;
+  customer_email: string;
+  total_price: number;
+  status: string;
+  events: Event;
+  booking_items: BookingItem[];
+}
+
 // POST /api/stripe/checkout/create - Create Stripe checkout session
 export async function POST(request: NextRequest) {
   try {
@@ -68,12 +102,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create line items for Stripe
-    const lineItems = booking.booking_items.map((item: any) => ({
+    // Create line items for Stripe - now properly typed
+    const typedBooking = booking as BookingWithRelations;
+    const lineItems = typedBooking.booking_items.map((item: BookingItem) => ({
       price_data: {
         currency: "usd",
         product_data: {
-          name: `${booking.events.title} - ${item.ticket_types.name}`,
+          name: `${typedBooking.events.title} - ${item.ticket_types.name}`,
           description: item.ticket_types.description || undefined,
         },
         unit_amount: Math.round(item.unit_price * 100), // Convert to cents
@@ -88,23 +123,26 @@ export async function POST(request: NextRequest) {
       mode: "payment",
       success_url:
         success_url ||
-        `${process.env.NEXTAUTH_URL}/events/${booking.events.id}/booking-success?session_id={CHECKOUT_SESSION_ID}&booking_id=${booking_id}`,
+        `${process.env.NEXTAUTH_URL}/events/${typedBooking.events.id}/booking-success?session_id={CHECKOUT_SESSION_ID}&booking_id=${booking_id}`,
       cancel_url:
-        cancel_url || `${process.env.NEXTAUTH_URL}/events/${booking.events.id}`,
+        cancel_url ||
+        `${process.env.NEXTAUTH_URL}/events/${typedBooking.events.id}`,
       metadata: {
         booking_id: booking_id,
-        event_id: booking.events.id,
+        event_id: typedBooking.events.id,
       },
-      customer_email: booking.customer_email,
+      customer_email: typedBooking.customer_email,
       payment_intent_data: {
         metadata: {
           booking_id: booking_id,
-          event_id: booking.events.id,
+          event_id: typedBooking.events.id,
         },
-        ...(booking.events.organizers?.stripe_account_id && {
-          application_fee_amount: Math.round(booking.total_price * 100 * 0.03), // 3% platform fee
+        ...(typedBooking.events.organizers?.stripe_account_id && {
+          application_fee_amount: Math.round(
+            typedBooking.total_price * 100 * 0.03
+          ), // 3% platform fee
           transfer_data: {
-            destination: booking.events.organizers.stripe_account_id,
+            destination: typedBooking.events.organizers.stripe_account_id,
           },
         }),
       },

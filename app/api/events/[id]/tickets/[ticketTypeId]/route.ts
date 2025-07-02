@@ -4,6 +4,22 @@ import {
   getUserFromToken,
 } from "@/lib/supabase-server";
 
+// Type for ticket type with nested event and organizer data
+// Note: Supabase returns nested relations as arrays even with .single()
+interface TicketTypeWithRelations {
+  id: string;
+  event_id: string;
+  quantity_sold?: number;
+  events:
+    | {
+        organizer_id: string;
+        organizers: {
+          user_id: string;
+        }[];
+      }[]
+    | null;
+}
+
 interface RouteParams {
   params: Promise<{
     id: string; // eventId
@@ -103,9 +119,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check ownership through the event organizer
-    const eventOrganizerUserId = (ticketType.events as any)?.organizers
-      ?.user_id;
+    // Check ownership through the event organizer - now properly typed
+    const typedTicketType = ticketType as TicketTypeWithRelations;
+    const eventOrganizerUserId =
+      typedTicketType.events?.[0]?.organizers?.[0]?.user_id;
     if (eventOrganizerUserId !== user.id) {
       return NextResponse.json(
         { error: "You don't have permission to update this ticket type" },
@@ -212,9 +229,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Check ownership through the event organizer
-    const eventOrganizerUserId = (ticketType.events as any)?.organizers
-      ?.user_id;
+    // Check ownership through the event organizer - now properly typed
+    const typedTicketType = ticketType as TicketTypeWithRelations;
+    const eventOrganizerUserId =
+      typedTicketType.events?.[0]?.organizers?.[0]?.user_id;
     if (eventOrganizerUserId !== user.id) {
       return NextResponse.json(
         { error: "You don't have permission to delete this ticket type" },
