@@ -118,10 +118,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Type the event as EventWithAllRelations for better type safety
     const typedEvent = event as EventWithAllRelations;
-    console.log(typedEvent);
-    console.log(user);
+
     // Check if user is authenticated and is the organizer of this event
-    if (user && typedEvent.organizers?.[0]?.user_id === user.id) {
+    // Handle both single object and array responses from Supabase
+    const organizers = typedEvent.organizers as
+      | Array<{ user_id: string }>
+      | { user_id: string };
+    const organizerUserId = Array.isArray(organizers)
+      ? organizers?.[0]?.user_id
+      : organizers?.user_id;
+
+    if (user && organizerUserId === user.id) {
       console.log(
         `[UNIFIED ROUTE] User ${user.id} is the organizer of event: ${typedEvent.title}`
       );
