@@ -38,7 +38,12 @@ const mockSupabaseClient = {
 };
 
 vi.mock("@/lib/supabase-server", () => ({
-  createClient: () => mockSupabaseClient,
+  getServerSupabaseClient: vi.fn(() => mockSupabaseClient),
+  getUserSupabaseClient: vi.fn(() => mockSupabaseClient),
+  getUserFromToken: vi.fn().mockResolvedValue(null),
+  isValidUUID: vi.fn().mockReturnValue(true),
+  createServerClient: vi.fn(),
+  createUserClient: vi.fn(),
 }));
 
 describe("Stripe API", () => {

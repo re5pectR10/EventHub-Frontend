@@ -17,18 +17,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock Next.js headers for Supabase SSR
-vi.mock("next/headers", async (importOriginal: any) => {
-  return {
-    cookies: () => ({
-      get: (name: string) => ({ value: "mock-cookie-value" }),
-      set: vi.fn(),
-      delete: vi.fn(),
-    }),
-    headers: () => ({
-      get: (name: string) => "mock-header-value",
-    }),
-  };
-});
+vi.mock("next/headers", () => ({
+  cookies: () => ({
+    get: () => ({ value: "mock-cookie-value" }),
+    set: vi.fn(),
+    delete: vi.fn(),
+  }),
+  headers: () => ({
+    get: () => "mock-header-value",
+  }),
+}));
 
 // Mock Supabase client
 vi.mock("@/utils/supabase/client", () => ({
@@ -72,6 +70,44 @@ vi.mock("@/utils/supabase/server", () => ({
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
     })),
   }),
+}));
+
+// Mock the server Supabase helper function
+vi.mock("@/lib/supabase-server", () => ({
+  getServerSupabaseClient: vi.fn().mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+    },
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })),
+  }),
+  getUserSupabaseClient: vi.fn().mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+    },
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })),
+  }),
+  getUserFromToken: vi.fn().mockResolvedValue(null),
+  isValidUUID: vi.fn().mockReturnValue(true),
+  createServerClient: vi.fn(),
+  createUserClient: vi.fn(),
 }));
 
 // Setup MSW

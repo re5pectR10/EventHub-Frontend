@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { NextRequest } from "next/server";
 
 // Mock Supabase with proper method chaining
 const mockCategories = [
@@ -17,10 +16,10 @@ const mockCategories = [
   },
 ];
 
-let mockQueryResult: any = { data: mockCategories, error: null };
+let mockQueryResult: unknown = { data: mockCategories, error: null };
 
 vi.mock("@/lib/supabase-server", () => ({
-  supabaseServer: {
+  getServerSupabaseClient: vi.fn(() => ({
     from: vi.fn(() => ({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockResolvedValue(mockQueryResult),
@@ -29,7 +28,17 @@ vi.mock("@/lib/supabase-server", () => ({
         single: vi.fn().mockResolvedValue(mockQueryResult),
       }),
     })),
-  },
+  })),
+  getUserSupabaseClient: vi.fn(() => ({
+    from: vi.fn().mockReturnThis(),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+    },
+  })),
+  getUserFromToken: vi.fn().mockResolvedValue(null),
+  isValidUUID: vi.fn().mockReturnValue(true),
+  createServerClient: vi.fn(),
+  createUserClient: vi.fn(),
 }));
 
 describe("Categories API", () => {
@@ -42,11 +51,7 @@ describe("Categories API", () => {
     it("should return all categories successfully", async () => {
       const { GET } = await import("@/app/api/categories/route");
 
-      const request = new NextRequest("http://localhost:3000/api/categories", {
-        method: "GET",
-      });
-
-      const response = await GET(request);
+      const response = await GET();
       expect(response.status).toBe(200);
 
       const data = await response.json();
@@ -61,11 +66,7 @@ describe("Categories API", () => {
 
       const { GET } = await import("@/app/api/categories/route");
 
-      const request = new NextRequest("http://localhost:3000/api/categories", {
-        method: "GET",
-      });
-
-      const response = await GET(request);
+      const response = await GET();
       expect(response.status).toBe(500);
 
       const data = await response.json();

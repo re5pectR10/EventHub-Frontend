@@ -30,17 +30,17 @@ vi.mock("stripe", () => {
 });
 
 // Create simple mocks for the data we need
-let mockUserFromToken: any = null;
-let mockOrganizerData: any = null;
-let mockEventData: any = null;
-let mockTicketData: any = null;
-let mockUpdateResult: any = null;
-let mockInsertResult: any = null;
-let mockRpcResult: any = null;
+let mockUserFromToken: unknown = null;
+let mockOrganizerData: unknown = null;
+let mockEventData: unknown = null;
+let mockTicketData: unknown = null;
+let mockUpdateResult: unknown = null;
+let mockInsertResult: unknown = null;
+let mockRpcResult: unknown = null;
 
-// Mock supabase-server with direct function mocks
+// Mock supabase-server with proper function exports
 vi.mock("@/lib/supabase-server", () => ({
-  supabaseServer: {
+  getServerSupabaseClient: vi.fn(() => ({
     from: vi.fn((table: string) => {
       if (table === "organizers") {
         return {
@@ -101,8 +101,17 @@ vi.mock("@/lib/supabase-server", () => ({
       };
     }),
     rpc: vi.fn().mockImplementation(() => mockRpcResult),
-  },
+  })),
+  getUserSupabaseClient: vi.fn(() => ({
+    from: vi.fn().mockReturnThis(),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+    },
+  })),
   getUserFromToken: vi.fn().mockImplementation(() => mockUserFromToken),
+  isValidUUID: vi.fn().mockReturnValue(true),
+  createServerClient: vi.fn(),
+  createUserClient: vi.fn(),
 }));
 
 describe("Stripe API Integration Tests", () => {
@@ -312,7 +321,7 @@ describe("Stripe API Integration Tests", () => {
         }
       );
 
-      const response = await POST(request);
+      await POST(request);
 
       // Verify platform fee calculation (5% of total)
       expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(

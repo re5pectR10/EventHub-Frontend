@@ -4,16 +4,42 @@ import {
   getUserFromToken,
 } from "@/lib/supabase-server";
 
-interface EventsQueryParams {
-  query?: string;
-  category?: string;
-  featured?: string;
-  date_from?: string;
-  date_to?: string;
-  location?: string;
-  sort?: "date_asc" | "date_desc" | "price_asc" | "price_desc";
-  page?: string;
-  limit?: string;
+// Generate URL-friendly slug from title
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "") // Remove special characters
+    .replace(/[\s_-]+/g, "-") // Replace spaces and underscores with hyphens
+    .replace(/^-+|-+$/g, ""); // Remove leading/trailing hyphens
+}
+
+// Generate unique slug by checking database
+async function generateUniqueSlug(
+  supabase: Awaited<ReturnType<typeof getServerSupabaseClient>>,
+  baseSlug: string,
+  eventId?: string
+): Promise<string> {
+  let slug = baseSlug;
+  let counter = 1;
+
+  while (true) {
+    let query = supabase.from("events").select("slug").eq("slug", slug);
+
+    // If updating an existing event, exclude it from the check
+    if (eventId) {
+      query = query.neq("id", eventId);
+    }
+
+    const { data: existingEvent } = await query.single();
+
+    if (!existingEvent) {
+      return slug;
+    }
+
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
 }
 
 // Get all events with search and filtering
@@ -125,11 +151,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate required fields
+    if (!eventData.title) {
+      return NextResponse.json(
+        { error: "Event title is required" },
+        { status: 400 }
+      );
+    }
+
+    // Generate unique slug from title
+    const baseSlug = generateSlug(eventData.title);
+    const uniqueSlug = await generateUniqueSlug(supabaseServer, baseSlug);
+
     // Create event
     const { data: event, error: eventError } = await supabaseServer
       .from("events")
       .insert({
         ...eventData,
+        slug: uniqueSlug,
         organizer_id: organizer.id,
         status: "draft", // New events start as drafts
         created_at: new Date().toISOString(),
