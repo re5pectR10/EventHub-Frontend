@@ -39,17 +39,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Check if identifier is a UUID or a slug
     const isUUID = isValidUUID(identifier);
-
     const supabaseServer = await getServerSupabaseClient();
-    let query = supabaseServer.from("events").select(`
+
+    // Base query for event with all relations
+    const baseQuery = supabaseServer.from("events").select(`
         *,
-        organizers(id, business_name, contact_email, description, website),
+        organizers(id, business_name, contact_email, description, website, user_id),
         event_categories(name, slug),
         event_images(image_url, alt_text, display_order, is_primary),
         ticket_types(*)
       `);
 
     // Apply the appropriate filter based on identifier type
+    let query = baseQuery;
     if (isUUID) {
       console.log(`[UNIFIED ROUTE] Treating as UUID: ${identifier}`);
       query = query.eq("id", identifier);
@@ -58,38 +60,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       query = query.eq("slug", identifier);
     }
 
-    // If user is authenticated, check if they own the event
-    if (user) {
-      const { data: organizer } = await supabaseServer
-        .from("organizers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+    // First, try to get the event (any status) to check ownership
+    const { data: event, error: eventError } = await query.single();
 
-      if (organizer) {
-        // If user is an organizer, they can see their own events regardless of status
-        const { data: ownEvent, error: ownError } = await query
-          .eq("organizer_id", organizer.id)
-          .single();
-
-        if (!ownError && ownEvent) {
-          console.log(
-            `[UNIFIED ROUTE] Found organizer's own event: ${ownEvent.title}`
-          );
-          return NextResponse.json({ event: ownEvent });
-        }
-      }
-    }
-
-    // For public access, only show published events
-    const { data: event, error } = await query
-      .eq("status", "published")
-      .single();
-
-    if (error || !event) {
+    if (eventError || !event) {
       console.log(
         `[UNIFIED ROUTE] Event not found for identifier: ${identifier}, error:`,
-        error
+        eventError
+      );
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // Check if user is authenticated and is the organizer of this event
+    if (user && event.organizers?.[0]?.user_id === user.id) {
+      console.log(
+        `[UNIFIED ROUTE] User ${user.id} is the organizer of event: ${event.title}`
+      );
+      console.log(`[UNIFIED ROUTE] Event status: ${event.status}`);
+      // Organizer can see their own event regardless of status
+      return NextResponse.json({ event });
+    }
+
+    // For non-organizers, only show published events
+    if (event.status !== "published") {
+      console.log(
+        `[UNIFIED ROUTE] Event ${event.title} is not published and user is not the organizer. Status: ${event.status}`
       );
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
