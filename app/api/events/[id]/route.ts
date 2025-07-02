@@ -118,7 +118,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Type the event as EventWithAllRelations for better type safety
     const typedEvent = event as EventWithAllRelations;
-
+    console.log(typedEvent);
+    console.log(user);
     // Check if user is authenticated and is the organizer of this event
     if (user && typedEvent.organizers?.[0]?.user_id === user.id) {
       console.log(
