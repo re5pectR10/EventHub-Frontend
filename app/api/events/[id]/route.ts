@@ -3,14 +3,59 @@ import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { Database } from "@/lib/types";
 
-// Type for event with nested organizer data
-// Note: Supabase returns nested relations as arrays even with .single()
+// Type for the complete event with all nested relations as returned by our Supabase query
+interface EventWithAllRelations {
+  id: string;
+  title: string;
+  description: string;
+  slug: string;
+  start_date: string;
+  start_time: string;
+  end_date: string;
+  end_time: string | null;
+  location_name: string;
+  location_address: string;
+  capacity: number | null;
+  category_id: string;
+  organizer_id: string;
+  status: Database["public"]["Enums"]["event_status"] | null;
+  featured: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  external_ticket_url: string | null;
+  external_url: string | null;
+  location_coordinates: unknown | null;
+  source_event_id: string | null;
+  source_platform: string | null;
+  organizers: Array<{
+    id: string;
+    business_name: string;
+    contact_email: string;
+    description: string | null;
+    website: string | null;
+    user_id: string;
+  }>;
+  event_categories: Array<{
+    name: string;
+    slug: string;
+  }>;
+  event_images: Array<{
+    image_url: string;
+    alt_text: string | null;
+    display_order: number | null;
+    is_primary: boolean | null;
+  }>;
+  ticket_types: Array<Database["public"]["Tables"]["ticket_types"]["Row"]>;
+}
+
+// Type for event ownership check (simplified for PUT/DELETE operations)
 interface EventWithOrganizer {
   organizer_id: string;
-  organizers: {
+  organizers: Array<{
     user_id: string;
-  }[];
+  }>;
 }
 
 interface RouteParams {
@@ -71,26 +116,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
+    // Type the event as EventWithAllRelations for better type safety
+    const typedEvent = event as EventWithAllRelations;
+
     // Check if user is authenticated and is the organizer of this event
-    if (user && event.organizers?.[0]?.user_id === user.id) {
+    if (user && typedEvent.organizers?.[0]?.user_id === user.id) {
       console.log(
-        `[UNIFIED ROUTE] User ${user.id} is the organizer of event: ${event.title}`
+        `[UNIFIED ROUTE] User ${user.id} is the organizer of event: ${typedEvent.title}`
       );
-      console.log(`[UNIFIED ROUTE] Event status: ${event.status}`);
+      console.log(`[UNIFIED ROUTE] Event status: ${typedEvent.status}`);
       // Organizer can see their own event regardless of status
-      return NextResponse.json({ event });
+      return NextResponse.json({ event: typedEvent });
     }
 
     // For non-organizers, only show published events
-    if (event.status !== "published") {
+    if (typedEvent.status !== "published") {
       console.log(
-        `[UNIFIED ROUTE] Event ${event.title} is not published and user is not the organizer. Status: ${event.status}`
+        `[UNIFIED ROUTE] Event ${typedEvent.title} is not published and user is not the organizer. Status: ${typedEvent.status}`
       );
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    console.log(`[UNIFIED ROUTE] Found published event: ${event.title}`);
-    return NextResponse.json({ event });
+    console.log(`[UNIFIED ROUTE] Found published event: ${typedEvent.title}`);
+    return NextResponse.json({ event: typedEvent });
   } catch (error) {
     console.error("[UNIFIED ROUTE] Event fetch error:", error);
     return NextResponse.json(
@@ -153,7 +201,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json({ event: updatedEvent });
+    // Type the updated event response
+    const typedUpdatedEvent =
+      updatedEvent as Database["public"]["Tables"]["events"]["Row"];
+    return NextResponse.json({ event: typedUpdatedEvent });
   } catch (error) {
     console.error("Event update error:", error);
     return NextResponse.json(
