@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const eventData = await request.json();
+    const { event: eventData, tickets = [] } = await request.json();
     const supabaseServer = await getServerSupabaseClient();
 
     // Check if user is an organizer
@@ -185,7 +185,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ event }, { status: 201 });
+    // Create ticket types if provided
+    let createdTickets = [];
+    if (tickets.length > 0 && event?.id) {
+      // Validate ticket data
+      for (let i = 0; i < tickets.length; i++) {
+        const ticket = tickets[i];
+        if (!ticket.name?.trim()) {
+          return NextResponse.json(
+            { error: `Ticket ${i + 1}: Name is required` },
+            { status: 400 }
+          );
+        }
+        if (ticket.price < 0) {
+          return NextResponse.json(
+            { error: `Ticket ${i + 1}: Price cannot be negative` },
+            { status: 400 }
+          );
+        }
+        if (!ticket.quantity_available || ticket.quantity_available <= 0) {
+          return NextResponse.json(
+            { error: `Ticket ${i + 1}: Quantity must be greater than 0` },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Prepare ticket data for insertion
+      const ticketsToInsert = tickets.map(
+        (ticket: {
+          name: string;
+          description?: string;
+          price: number;
+          quantity_available: number;
+          sale_start_date?: string;
+          sale_end_date?: string;
+          max_per_order?: number;
+        }) => ({
+          ...ticket,
+          event_id: event.id,
+          quantity_sold: 0,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      );
+
+      const { data: ticketData, error: ticketError } = await supabaseServer
+        .from("ticket_types")
+        .insert(ticketsToInsert)
+        .select();
+
+      if (ticketError) {
+        console.error("Ticket creation error:", ticketError);
+        // If tickets fail to create, we should delete the event to maintain consistency
+        await supabaseServer.from("events").delete().eq("id", event.id);
+        return NextResponse.json(
+          { error: `Failed to create tickets: ${ticketError.message}` },
+          { status: 500 }
+        );
+      }
+
+      createdTickets = ticketData || [];
+    }
+
+    return NextResponse.json(
+      {
+        event: {
+          ...event,
+          ticket_types: createdTickets,
+        },
+        tickets: createdTickets,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Event creation error:", error);
     return NextResponse.json(

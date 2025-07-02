@@ -195,12 +195,28 @@ class ApiService {
     return this.getEvent(slug);
   }
 
-  async createEvent(eventData: Partial<Event>): Promise<ApiResponse<Event>> {
+  async createEvent(
+    eventData: Partial<Event>,
+    tickets?: Array<{
+      name: string;
+      description?: string;
+      price: number;
+      quantity_available: number;
+      sale_start_date?: string;
+      sale_end_date?: string;
+      max_per_order?: number;
+    }>
+  ): Promise<ApiResponse<Event & { ticket_types?: TicketType[] }>> {
     try {
       const {
         data: { session },
       } = await this.supabase.auth.getSession();
       const token = session?.access_token;
+
+      const requestBody = {
+        event: eventData,
+        tickets: tickets || [],
+      };
 
       const response = await fetch("/api/events", {
         method: "POST",
@@ -208,7 +224,7 @@ class ApiService {
           "Content-Type": "application/json",
           ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify(eventData),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -378,37 +394,11 @@ class ApiService {
     }
   }
 
-  async getTicketType(id: string): Promise<ApiResponse<TicketType>> {
-    try {
-      const response = await fetch(`/api/tickets/${id}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `HTTP error! status: ${response.status}, message: ${errorText}`
-        );
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Ticket Type API Error:", error);
-      return {
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  }
-
   async getTicketTypesByEvent(
     eventId: string
   ): Promise<ApiResponse<TicketType[]>> {
     try {
-      const response = await fetch(`/api/tickets/event/${eventId}`, {
+      const response = await fetch(`/api/events/${eventId}/tickets`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -433,7 +423,8 @@ class ApiService {
   }
 
   async updateTicketType(
-    id: string,
+    eventId: string,
+    ticketTypeId: string,
     ticketData: Partial<TicketType>
   ): Promise<ApiResponse<TicketType>> {
     try {
@@ -442,14 +433,17 @@ class ApiService {
       } = await this.supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch(`/api/tickets/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify(ticketData),
-      });
+      const response = await fetch(
+        `/api/events/${eventId}/tickets/${ticketTypeId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify(ticketData),
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -468,20 +462,26 @@ class ApiService {
     }
   }
 
-  async deleteTicketType(id: string): Promise<ApiResponse<void>> {
+  async deleteTicketType(
+    eventId: string,
+    ticketTypeId: string
+  ): Promise<ApiResponse<void>> {
     try {
       const {
         data: { session },
       } = await this.supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch(`/api/tickets/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
+      const response = await fetch(
+        `/api/events/${eventId}/tickets/${ticketTypeId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1265,22 +1265,6 @@ export function useTicketsByEvent(eventId: string) {
   });
 }
 
-export function useTicketType(id: string) {
-  return useQuery({
-    queryKey: [...QUERY_KEYS.tickets.all, "detail", id],
-    queryFn: async () => {
-      const response = await apiService.getTicketType(id);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      return response.ticket_type || response.data;
-    },
-    enabled: !!id,
-    staleTime: 1 * 60 * 1000, // 1 minute
-    refetchOnWindowFocus: false,
-  });
-}
-
 // Stripe Hooks
 export function useStripeConnectStatus() {
   return useQuery({
@@ -1350,8 +1334,21 @@ export function useCreateEvent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (eventData: Partial<Event>) =>
-      apiService.createEvent(eventData),
+    mutationFn: ({
+      eventData,
+      tickets,
+    }: {
+      eventData: Partial<Event>;
+      tickets?: Array<{
+        name: string;
+        description?: string;
+        price: number;
+        quantity_available: number;
+        sale_start_date?: string;
+        sale_end_date?: string;
+        max_per_order?: number;
+      }>;
+    }) => apiService.createEvent(eventData, tickets),
     onSuccess: () => {
       // Invalidate and refetch events
       queryClient.invalidateQueries({
@@ -1499,18 +1496,23 @@ export function useUpdateTicket() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ticketData }: { id: string; ticketData: any }) =>
-      apiService.updateTicketType(id, ticketData),
+    mutationFn: ({
+      eventId,
+      ticketTypeId,
+      ticketData,
+    }: {
+      eventId: string;
+      ticketTypeId: string;
+      ticketData: Partial<TicketType>;
+    }) => apiService.updateTicketType(eventId, ticketTypeId, ticketData),
     onSuccess: (data, variables) => {
       // Invalidate tickets for the specific event
-      if (variables.ticketData.event_id) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.tickets.byEvent(variables.ticketData.event_id),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.events.detail(variables.ticketData.event_id),
-        });
-      }
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.tickets.byEvent(variables.eventId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.events.detail(variables.eventId),
+      });
     },
   });
 }
@@ -1519,8 +1521,13 @@ export function useDeleteTicket() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, eventId }: { id: string; eventId: string }) =>
-      apiService.deleteTicketType(id),
+    mutationFn: ({
+      eventId,
+      ticketTypeId,
+    }: {
+      eventId: string;
+      ticketTypeId: string;
+    }) => apiService.deleteTicketType(eventId, ticketTypeId),
     onSuccess: (data, variables) => {
       // Invalidate tickets for the specific event
       queryClient.invalidateQueries({

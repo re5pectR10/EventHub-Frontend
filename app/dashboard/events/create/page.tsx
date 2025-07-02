@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCategories, useCreateEvent, useCreateTicket } from "@/lib/api";
+import { useCategories, useCreateEvent } from "@/lib/api";
 import type { EventFormData, TicketTypeFormData } from "@/lib/types";
 
 // Alias for local usage
@@ -55,7 +55,6 @@ export default function CreateEventPage() {
   } = useCategories();
 
   const createEventMutation = useCreateEvent();
-  const createTicketMutation = useCreateTicket();
 
   const error = categoriesError?.message || null;
 
@@ -175,28 +174,17 @@ export default function CreateEventPage() {
     }
 
     try {
-      const response = await createEventMutation.mutateAsync(event);
+      const response = await createEventMutation.mutateAsync({
+        eventData: event,
+        tickets: ticketTypes,
+      });
 
       if (response.error) {
         throw new Error(response.error);
       }
 
       if (response.data || response.event) {
-        const eventData = response.data || response.event;
-
-        // Create ticket types if any
-        if (ticketTypes.length > 0 && eventData?.id) {
-          for (const ticket of ticketTypes) {
-            const ticketData = {
-              ...ticket,
-              event_id: eventData.id,
-            };
-
-            await createTicketMutation.mutateAsync(ticketData);
-          }
-        }
-
-        setSuccess("Event created successfully!");
+        setSuccess("Event and tickets created successfully!");
 
         // Redirect to events page after a short delay
         setTimeout(() => {
@@ -227,8 +215,7 @@ export default function CreateEventPage() {
     );
   }
 
-  const isSubmitting =
-    createEventMutation.isPending || createTicketMutation.isPending;
+  const isSubmitting = createEventMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
