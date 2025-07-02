@@ -160,9 +160,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const authHeader = request.headers.get("Authorization") || undefined;
+    console.log("[PUT] Auth header present:", !!authHeader);
     const user = await getUserFromToken(authHeader);
+    console.log("[PUT] User authenticated:", !!user, user?.id);
 
     if (!user) {
+      console.log("[PUT] No authenticated user found");
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -170,6 +173,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const { id: eventId } = await params;
+    console.log("[PUT] Updating event:", eventId, "by user:", user.id);
     const updateData = await request.json();
     const supabaseServer = await getServerSupabaseClient();
 
@@ -181,12 +185,30 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (eventError || !event) {
+      console.log("[PUT] Event not found:", eventId, eventError);
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
     // Check ownership through the event organizer - now properly typed
     const typedEvent = event as EventWithOrganizer;
-    if (typedEvent.organizers?.[0]?.user_id !== user.id) {
+    // Handle both single object and array responses from Supabase
+    const organizers = typedEvent.organizers as
+      | Array<{ user_id: string }>
+      | { user_id: string };
+    const organizerUserId = Array.isArray(organizers)
+      ? organizers?.[0]?.user_id
+      : organizers?.user_id;
+
+    console.log(
+      "[PUT] Ownership check - Event organizer user_id:",
+      organizerUserId,
+      "Current user:",
+      user.id,
+      "Is array:",
+      Array.isArray(organizers)
+    );
+    if (organizerUserId !== user.id) {
+      console.log("[PUT] User is not the organizer of this event");
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -251,7 +273,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Check ownership through the event organizer - now properly typed
     const typedEvent = event as EventWithOrganizer;
-    if (typedEvent.organizers?.[0]?.user_id !== user.id) {
+    // Handle both single object and array responses from Supabase
+    const organizers = typedEvent.organizers as
+      | Array<{ user_id: string }>
+      | { user_id: string };
+    const organizerUserId = Array.isArray(organizers)
+      ? organizers?.[0]?.user_id
+      : organizers?.user_id;
+
+    if (organizerUserId !== user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
