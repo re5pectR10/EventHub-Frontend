@@ -68,6 +68,7 @@ export default function OrganizerProfilePage() {
       if (response.error) {
         throw new Error(response.error);
       }
+      console.log(response);
       if (response.events) {
         // Filter events by organizer (ideally this should be done in the API)
         return response.events.filter(

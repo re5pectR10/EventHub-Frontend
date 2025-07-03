@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,9 +10,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Minus, Plus, Calendar, MapPin, Clock, CreditCard } from "lucide-react";
 import { apiService } from "@/lib/api";
-import type { Event, TicketType, TicketSelection } from "@/lib/types";
+import type { Event, TicketSelection } from "@/lib/types";
+import { Calendar, Clock, CreditCard, MapPin, Minus, Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function BookEventPage() {
   const params = useParams();
@@ -256,7 +256,7 @@ export default function BookEventPage() {
               <CardHeader>
                 <CardTitle>Select Tickets</CardTitle>
                 <CardDescription>
-                  Choose the number of tickets you'd like to purchase
+                  Choose the number of tickets you&apos;d like to purchase
                 </CardDescription>
               </CardHeader>
               <CardContent>
