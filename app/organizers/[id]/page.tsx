@@ -1,7 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { EventCard } from "@/components/events/event-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,22 +9,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  MapPin,
-  Globe,
-  Mail,
-  Calendar,
-  Users,
-  ExternalLink,
-  ArrowLeft,
-  Building2,
-  AlertCircle,
-  Loader2,
-} from "lucide-react";
 import { apiService } from "@/lib/api";
 import { toast } from "@/lib/notifications";
-import type { Organizer, Event } from "@/lib/types";
-import { EventCard } from "@/components/events/event-card";
+import type { Event } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Building2,
+  Calendar,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Mail,
+  MapPin,
+  Users,
+} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 
 export default function OrganizerProfilePage() {
   const params = useParams();
@@ -64,7 +64,7 @@ export default function OrganizerProfilePage() {
   } = useQuery({
     queryKey: ["organizer-events", organizerId],
     queryFn: async () => {
-      const response = await apiService.getEvents({});
+      const response = await apiService.getOrganizerEventsById(organizerId);
       if (response.error) {
         throw new Error(response.error);
       }
@@ -324,8 +324,8 @@ export default function OrganizerProfilePage() {
                       No Events Yet
                     </h3>
                     <p className="text-gray-600">
-                      This organizer hasn't published any events yet. Check back
-                      later!
+                      This organizer hasn&apos;t published any events yet. Check
+                      back later!
                     </p>
                   </div>
                 ) : (

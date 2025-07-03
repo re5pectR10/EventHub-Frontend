@@ -868,6 +868,43 @@ class ApiService {
     }
   }
 
+  async getOrganizerEventsById(
+    organizerId: string
+  ): Promise<ApiResponse<Event[]>> {
+    try {
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(
+        `/api/organizers/events?organizer_id=${organizerId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Organizer Events API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
   // Get single event for organizer (includes their own draft events)
   async getOrganizerEvent(id: string): Promise<ApiResponse<Event>> {
     // Try to get from organizer's events first
