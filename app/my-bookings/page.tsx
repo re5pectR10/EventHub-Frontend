@@ -1,38 +1,32 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Calendar,
-  MapPin,
-  Users,
-  CreditCard,
-  Search,
-  Filter,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Loader2,
-  Receipt,
-  Download,
-  ArrowRight,
-} from "lucide-react";
 import { apiService } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { toast } from "@/lib/notifications";
 import type { Booking } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowRight,
+  Calendar,
+  CheckCircle,
+  CreditCard,
+  Download,
+  Filter,
+  Loader2,
+  MapPin,
+  Receipt,
+  Search,
+  Users,
+  XCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 type BookingStatus = "all" | "confirmed" | "pending" | "cancelled";
 
@@ -373,6 +367,19 @@ export default function MyBookingsPage() {
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </Link>
                       </Button>
+
+                      {booking.status === "pending" && (
+                        <Button
+                          asChild
+                          className="flex-1 bg-blue-600 hover:bg-blue-700"
+                          size="sm"
+                        >
+                          <Link href={`/checkout/${booking.id}`}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Pay Now
+                          </Link>
+                        </Button>
+                      )}
 
                       {booking.status === "confirmed" && (
                         <Button variant="outline" className="flex-1" size="sm">

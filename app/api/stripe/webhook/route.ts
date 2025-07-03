@@ -1,6 +1,6 @@
+import { getServerSupabaseClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { getServerSupabaseClient } from "@/lib/supabase-server";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -23,6 +23,60 @@ function generateQRCode(ticketCode: string): string {
 // Handle successful checkout
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   try {
+    const supabaseServer = await getServerSupabaseClient();
+    const bookingId = session.metadata?.booking_id;
+
+    // New flow: Update existing booking
+    if (bookingId) {
+      console.log(`Updating existing booking: ${bookingId}`);
+
+      // Update booking status to confirmed
+      const { data: booking, error: updateError } = await supabaseServer
+        .from("bookings")
+        .update({
+          status: "confirmed",
+          stripe_payment_intent_id: session.payment_intent as string,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", bookingId)
+        .select(
+          `
+          *,
+          booking_items(
+            ticket_type_id,
+            quantity
+          )
+        `
+        )
+        .single();
+
+      if (updateError || !booking) {
+        console.error("Failed to update booking:", updateError);
+        return;
+      }
+
+      // Generate tickets for the confirmed booking
+      for (const item of booking.booking_items) {
+        for (let i = 0; i < item.quantity; i++) {
+          const ticketCode = generateTicketCode();
+          const qrCode = generateQRCode(ticketCode);
+
+          await supabaseServer.from("tickets").insert({
+            booking_id: booking.id,
+            ticket_type_id: item.ticket_type_id,
+            ticket_code: ticketCode,
+            qr_code: qrCode,
+            status: "issued",
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      console.log(`Booking ${bookingId} confirmed successfully`);
+      return;
+    }
+
+    // Legacy flow: Create booking from metadata (backward compatibility)
     const eventId = session.metadata?.event_id;
     const ticketsMetadata = session.metadata?.tickets;
 
@@ -32,7 +86,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
 
     const tickets = JSON.parse(ticketsMetadata);
-    const supabaseServer = await getServerSupabaseClient();
 
     // Create booking record
     const bookingData = {

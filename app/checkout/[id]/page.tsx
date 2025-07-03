@@ -56,29 +56,30 @@ function CheckoutContent() {
     mutationFn: async () => {
       if (!booking) throw new Error("No booking data");
 
-      // Prepare tickets data for Stripe checkout
-      const tickets =
-        booking.booking_items?.map((item) => ({
-          ticket_type_id: item.ticket_type_id,
-          quantity: item.quantity,
-        })) || [];
-
-      // Create Stripe checkout session
-      const response = await apiService.createStripeCheckoutSession({
-        event_id: booking.event_id,
-        tickets,
-        customer_email: booking.customer_email,
+      // Create Stripe checkout session using the booking ID
+      const response = await fetch("/api/stripe/checkout/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          booking_id: booking.id,
+          success_url: `${window.location.origin}/checkout/${booking.id}?success=true&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${window.location.origin}/checkout/${booking.id}`,
+        }),
       });
 
-      if (response.error) {
-        throw new Error(response.error);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create checkout session");
       }
 
-      if (!response.data?.checkout_url) {
+      if (!data.checkout_url) {
         throw new Error("No checkout URL received");
       }
 
-      return response.data.checkout_url;
+      return data.checkout_url;
     },
     onSuccess: (checkoutUrl) => {
       // Redirect to Stripe Checkout

@@ -1,7 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,25 +9,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  MapPin,
-  Calendar,
-  User,
-  Mail,
-  Phone,
-  CreditCard,
-  Download,
-  ArrowLeft,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  QrCode,
-  Loader2,
-} from "lucide-react";
 import { apiService } from "@/lib/api";
 import { toast } from "@/lib/notifications";
-import type { Booking } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  CheckCircle,
+  CreditCard,
+  Download,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  QrCode,
+  User,
+  XCircle,
+} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 
 export default function BookingDetailsPage() {
   const params = useParams();
@@ -383,6 +382,18 @@ export default function BookingDetailsPage() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {booking.status === "pending" && (
+                  <Button
+                    asChild
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    <a href={`/checkout/${booking.id}`}>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Complete Payment
+                    </a>
+                  </Button>
+                )}
+
                 {booking.status === "confirmed" && (
                   <>
                     <Button className="w-full" onClick={handleDownloadTickets}>

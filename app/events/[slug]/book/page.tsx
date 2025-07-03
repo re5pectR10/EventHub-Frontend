@@ -138,7 +138,10 @@ export default function BookEventPage() {
 
       if (response?.checkout_url) {
         // Redirect to Stripe Checkout
-        router.push(response.checkout_url);
+        window.location.href = response.checkout_url;
+      } else if (response?.booking?.id) {
+        // Booking created but checkout failed, redirect to checkout page for retry
+        router.push(`/checkout/${response.booking.id}`);
       }
     } catch (error) {
       console.error("Checkout error:", error);

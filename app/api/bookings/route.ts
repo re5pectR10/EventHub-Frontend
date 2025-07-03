@@ -1,8 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2025-05-28.basil",
+});
 
 interface BookingItemRequest {
   ticket_type_id: string;
@@ -15,6 +21,17 @@ interface CreateBookingRequest {
   customer_name: string;
   customer_email: string;
   customer_phone?: string;
+}
+
+// Type for booking item with relations for Stripe
+interface BookingItemWithTicketType {
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  ticket_types: {
+    name: string;
+    description: string | null;
+  };
 }
 
 // GET /api/bookings - Get user's bookings
@@ -92,7 +109,7 @@ export async function POST(request: NextRequest) {
     // Validate event exists and is bookable
     const { data: event, error: eventError } = await supabaseServer
       .from("events")
-      .select("id, title, status, start_date")
+      .select("id, title, status, start_date, slug")
       .eq("id", event_id)
       .single();
 
@@ -222,10 +239,115 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      booking,
-      message: "Booking created successfully",
-    });
+    // Create Stripe checkout session
+    try {
+      // Get the full booking data with relations for Stripe
+      const { data: fullBooking, error: fullBookingError } =
+        await supabaseServer
+          .from("bookings")
+          .select(
+            `
+          *,
+          events(
+            id,
+            title,
+            organizer_id,
+            slug,
+            organizers(
+              business_name,
+              stripe_account_id
+            )
+          ),
+          booking_items(
+            quantity,
+            unit_price,
+            total_price,
+            ticket_types(
+              name,
+              description
+            )
+          )
+        `
+          )
+          .eq("id", booking.id)
+          .single();
+
+      if (fullBookingError || !fullBooking) {
+        console.error("Failed to fetch full booking data:", fullBookingError);
+        // Return booking without checkout URL as fallback
+        return NextResponse.json({
+          booking,
+          message: "Booking created successfully",
+        });
+      }
+
+      // Create line items for Stripe
+      const lineItems = fullBooking.booking_items.map(
+        (item: BookingItemWithTicketType) => ({
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `${fullBooking.events.title} - ${item.ticket_types.name}`,
+              description: item.ticket_types.description || undefined,
+            },
+            unit_amount: Math.round(item.unit_price * 100), // Convert to cents
+          },
+          quantity: item.quantity,
+        })
+      );
+
+      // Create Stripe checkout session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: lineItems,
+        mode: "payment",
+        success_url: `${process.env.NEXTAUTH_URL}/events/${fullBooking.events.slug}/booking-success?session_id={CHECKOUT_SESSION_ID}&booking_id=${booking.id}`,
+        cancel_url: `${process.env.NEXTAUTH_URL}/events/${fullBooking.events.slug}`,
+        metadata: {
+          booking_id: booking.id,
+          event_id: fullBooking.events.id,
+        },
+        customer_email: fullBooking.customer_email,
+        payment_intent_data: {
+          metadata: {
+            booking_id: booking.id,
+            event_id: fullBooking.events.id,
+          },
+          ...(fullBooking.events.organizers?.stripe_account_id && {
+            application_fee_amount: Math.round(
+              fullBooking.total_price * 100 * 0.03
+            ), // 3% platform fee
+            transfer_data: {
+              destination: fullBooking.events.organizers.stripe_account_id,
+            },
+          }),
+        },
+      });
+
+      // Update booking with checkout session ID
+      await supabaseServer
+        .from("bookings")
+        .update({
+          stripe_checkout_session_id: session.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", booking.id);
+
+      return NextResponse.json({
+        booking,
+        checkout_url: session.url,
+        session_id: session.id,
+        message: "Booking created successfully",
+      });
+    } catch (stripeError) {
+      console.error("Stripe checkout creation error:", stripeError);
+      // Return booking without checkout URL - user can retry payment later
+      return NextResponse.json({
+        booking,
+        message:
+          "Booking created successfully. You can complete payment from your bookings page.",
+      });
+    }
   } catch (error) {
     console.error("Booking creation error:", error);
     return NextResponse.json(
