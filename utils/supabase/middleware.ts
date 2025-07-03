@@ -40,14 +40,14 @@ export async function updateSession(request: NextRequest) {
     await supabase.auth.getUser();
   }
 
-  const authRoutes = "/auth";
+  const authRoute = "/auth";
   // Define public routes that don't require authentication
   const publicRoutes = [
     "/",
     "/events",
     "/categories",
     "/organizers",
-    authRoutes,
+    authRoute,
   ];
 
   // Check if current path is a public route
@@ -78,7 +78,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && request.nextUrl.pathname.startsWith(authRoutes)) {
+  const isAuthRoute = request.nextUrl.pathname.startsWith(authRoute);
+  const isDynamicAuthRoute = /^\/auth\/[^\/]+$/.test(request.nextUrl.pathname);
+
+  if (user && (isAuthRoute || isDynamicAuthRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
