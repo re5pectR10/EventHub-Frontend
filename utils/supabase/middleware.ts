@@ -80,7 +80,7 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = request.nextUrl.pathname.startsWith(authRoute);
   const isDynamicAuthRoute = /^\/auth\/[^\/]+$/.test(request.nextUrl.pathname);
-
+  console.log(isAuthRoute, isDynamicAuthRoute, user);
   if (user && (isAuthRoute || isDynamicAuthRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
