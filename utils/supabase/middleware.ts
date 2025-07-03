@@ -40,8 +40,15 @@ export async function updateSession(request: NextRequest) {
     await supabase.auth.getUser();
   }
 
+  const authRoutes = "/auth";
   // Define public routes that don't require authentication
-  const publicRoutes = ["/", "/events", "/categories", "/organizers", "/auth"];
+  const publicRoutes = [
+    "/",
+    "/events",
+    "/categories",
+    "/organizers",
+    authRoutes,
+  ];
 
   // Check if current path is a public route
   const isPublicRoute = publicRoutes.some((route) => {
@@ -68,6 +75,12 @@ export async function updateSession(request: NextRequest) {
     // no user, potentially respond by redirecting the user to the auth page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/signin";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && request.nextUrl.pathname.startsWith(authRoutes)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
