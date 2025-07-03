@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormField, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useAuthActions } from "@/lib/stores/auth-store";
 import { createClient } from "@/utils/supabase/client";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,7 @@ function SignInForm() {
   const searchParams = useSearchParams();
   const message = searchParams.get("message");
   const supabase = createClient();
+  const { refresh } = useAuthActions();
 
   const [formData, setFormData] = useState<FormData>({
     email: "",
@@ -76,11 +78,15 @@ function SignInForm() {
           general: error.message,
         });
       } else {
+        // Refresh auth state to ensure the header updates immediately
+        await refresh();
+
         // Redirect to dashboard or home page
         router.push("/");
         router.refresh();
       }
     } catch (error) {
+      console.error("Sign in error:", error);
       setErrors({
         general: "An unexpected error occurred. Please try again.",
       });
@@ -104,6 +110,7 @@ function SignInForm() {
         });
       }
     } catch (error) {
+      console.error("Google sign in error:", error);
       setErrors({
         general: "Failed to sign in with Google. Please try again.",
       });
@@ -138,9 +145,9 @@ function SignInForm() {
 
             <CardContent>
               <Form onSubmit={handleSubmit}>
-                {errors.general && (
+                {(errors.general || message) && (
                   <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-                    <FormMessage>{errors.general}</FormMessage>
+                    <FormMessage>{errors.general || message}</FormMessage>
                   </div>
                 )}
 
