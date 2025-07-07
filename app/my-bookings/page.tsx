@@ -26,64 +26,64 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 
 type BookingStatus = "all" | "confirmed" | "pending" | "cancelled";
 
 export default function MyBookingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<BookingStatus>("all");
   const router = useRouter();
   const { user, isLoading: isLoadingUser } = useAuth();
+
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Redirect if not authenticated
   const userError =
     !user && !isLoadingUser ? new Error("Not authenticated") : null;
 
-  // Fetch user's bookings
+  // Fetch user's bookings with search and filter parameters
   const {
-    data: bookings = [],
+    data: bookingsResponse,
     isLoading: isLoadingBookings,
     error: bookingsError,
     refetch,
   } = useQuery({
-    queryKey: ["user-bookings"],
+    queryKey: [
+      "user-bookings",
+      { search: debouncedSearchQuery, status: statusFilter },
+    ],
     queryFn: async () => {
-      const response = await apiService.getBookings();
+      const params: { search?: string; status?: string } = {};
+
+      if (debouncedSearchQuery.trim()) {
+        params.search = debouncedSearchQuery.trim();
+      }
+
+      if (statusFilter !== "all") {
+        params.status = statusFilter;
+      }
+
+      const response = await apiService.getBookings(params);
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.bookings || [];
+      return response;
     },
     enabled: !!user,
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: 2,
   });
 
-  // Filter bookings based on search and status
-  const filteredBookings = useMemo(() => {
-    let filtered = bookings;
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (booking: Booking) => booking.status === statusFilter
-      );
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (booking: Booking) =>
-          booking.events?.title?.toLowerCase().includes(query) ||
-          booking.customer_name?.toLowerCase().includes(query) ||
-          booking.events?.location_name?.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [bookings, statusFilter, searchQuery]);
+  const bookings = bookingsResponse?.bookings || [];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -239,8 +239,8 @@ export default function MyBookingsPage() {
         {/* Results Count */}
         <div className="mb-6">
           <p className="text-gray-600">
-            {filteredBookings.length} booking
-            {filteredBookings.length !== 1 ? "s" : ""} found
+            {bookings.length} booking
+            {bookings.length !== 1 ? "s" : ""} found
             {(searchQuery || statusFilter !== "all") && (
               <span className="ml-2 text-sm">
                 {searchQuery && `for "${searchQuery}"`}
@@ -252,7 +252,7 @@ export default function MyBookingsPage() {
         </div>
 
         {/* Bookings List */}
-        {filteredBookings.length === 0 ? (
+        {bookings.length === 0 ? (
           <div className="text-center py-12">
             <Receipt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -284,7 +284,7 @@ export default function MyBookingsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredBookings.map((booking: Booking) => (
+            {bookings.map((booking: Booking) => (
               <Card
                 key={booking.id}
                 className="hover:shadow-md transition-shadow"
@@ -396,11 +396,14 @@ export default function MyBookingsPage() {
         )}
 
         {/* Pagination would go here if needed */}
-        {filteredBookings.length > 0 && (
+        {bookings.length > 0 && (
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Showing {filteredBookings.length} of {bookings.length} total
-              bookings
+              Showing {bookings.length} booking
+              {bookings.length !== 1 ? "s" : ""}
+              {bookingsResponse?.pagination && (
+                <span> of {bookingsResponse.pagination.total} total</span>
+              )}
             </p>
           </div>
         )}

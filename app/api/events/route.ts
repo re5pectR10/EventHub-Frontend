@@ -67,7 +67,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
+    const q = searchParams.get("q"); // New query parameter
     const location = searchParams.get("location");
+    const sort = searchParams.get("sort"); // New sort parameter
+    const dateFrom = searchParams.get("dateFrom"); // New date range parameter
+    const dateTo = searchParams.get("dateTo"); // New date range parameter
 
     const offset = (page - 1) * limit;
     const supabaseServer = await getServerSupabaseClient();
@@ -85,22 +89,59 @@ export async function GET(request: NextRequest) {
       `,
         { count: "exact" }
       )
-      .eq("status", "published")
-      .order("start_date", { ascending: true });
+      .eq("status", "published");
 
-    // Apply filters
+    // Apply category filter
     if (category) {
       query = query.eq("event_categories.slug", category);
     }
 
-    if (search) {
+    // Apply search filter (support both 'search' and 'q' parameters)
+    const searchQuery = q || search;
+    if (searchQuery) {
       query = query.or(
-        `title.ilike.%${search}%,description.ilike.%${search}%,location_name.ilike.%${search}%`
+        `title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,location_name.ilike.%${searchQuery}%`
       );
     }
 
+    // Apply location filter
     if (location) {
       query = query.ilike("location_name", `%${location}%`);
+    }
+
+    // Apply date range filters
+    if (dateFrom) {
+      query = query.gte("start_date", dateFrom);
+    }
+    if (dateTo) {
+      query = query.lte("start_date", dateTo);
+    }
+
+    // Apply sorting
+    if (sort) {
+      switch (sort) {
+        case "date_asc":
+          query = query.order("start_date", { ascending: true });
+          break;
+        case "date_desc":
+          query = query.order("start_date", { ascending: false });
+          break;
+        case "price_asc":
+          // For price sorting, we'll need to order by the minimum ticket price
+          // This is a simplified approach - in production you might want to use a computed column
+          query = query.order("start_date", { ascending: true }); // Fallback to date
+          break;
+        case "price_desc":
+          // For price sorting, we'll need to order by the minimum ticket price
+          // This is a simplified approach - in production you might want to use a computed column
+          query = query.order("start_date", { ascending: true }); // Fallback to date
+          break;
+        default:
+          query = query.order("start_date", { ascending: true });
+      }
+    } else {
+      // Default sort by start date ascending
+      query = query.order("start_date", { ascending: true });
     }
 
     // Apply pagination

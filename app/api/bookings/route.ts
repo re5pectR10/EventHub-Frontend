@@ -47,8 +47,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const search = searchParams.get("search");
+    const status = searchParams.get("status");
+
+    const offset = (page - 1) * limit;
     const supabaseServer = await getServerSupabaseClient();
-    const { data: bookings, error } = await supabaseServer
+
+    let query = supabaseServer
       .from("bookings")
       .select(
         `
@@ -61,10 +69,30 @@ export async function GET(request: NextRequest) {
           ticket_types(name)
         ),
         tickets(id, ticket_code, qr_code, status)
-      `
+      `,
+        { count: "exact" }
       )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .eq("user_id", user.id);
+
+    // Apply status filter
+    if (status && status !== "all") {
+      query = query.eq("status", status);
+    }
+
+    // Apply search filter
+    if (search) {
+      // Search across event title, customer name, and location
+      query = query.or(
+        `customer_name.ilike.%${search}%,events.title.ilike.%${search}%,events.location_name.ilike.%${search}%`
+      );
+    }
+
+    // Apply sorting and pagination
+    query = query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data: bookings, error, count } = await query;
 
     if (error) {
       console.error("Database error:", error);
@@ -74,7 +102,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ bookings: bookings || [] });
+    const totalPages = Math.ceil((count || 0) / limit);
+
+    return NextResponse.json({
+      bookings: bookings || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (error) {
     console.error("Bookings fetch error:", error);
     return NextResponse.json(

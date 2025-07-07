@@ -176,15 +176,31 @@ export interface BookingDetails extends Omit<Booking, "events"> {
 // Search and filter types
 export interface EventSearchParams {
   query?: string;
+  q?: string; // Alternative query parameter
   category?: string;
   featured?: boolean;
   date_from?: string;
   date_to?: string;
+  dateFrom?: string; // Alternative date parameter names
+  dateTo?: string; // Alternative date parameter names
   location?: string;
   latitude?: number;
   longitude?: number;
   radius?: number;
   sort?: "date_asc" | "date_desc" | "price_asc" | "price_desc";
+  page?: number;
+  limit?: number;
+}
+
+export interface OrganizerSearchParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface BookingSearchParams {
+  search?: string;
+  status?: string;
   page?: number;
   limit?: number;
 }

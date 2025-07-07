@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Image from "next/image";
 import {
   Search,
   MapPin,
@@ -22,36 +23,36 @@ import type { Organizer } from "@/lib/types";
 
 export default function OrganizersPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
-  // Fetch organizers using React Query
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch organizers using React Query with search parameters
   const {
     data: organizers = [],
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["organizers"],
+    queryKey: ["organizers", { search: debouncedSearchQuery }],
     queryFn: async () => {
-      const data = await apiService.getOrganizers();
+      const params = debouncedSearchQuery.trim()
+        ? { search: debouncedSearchQuery.trim() }
+        : undefined;
+      const data = await apiService.getOrganizers(params);
       return data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
-
-  // Filter organizers based on search query
-  const filteredOrganizers = useMemo(() => {
-    if (!searchQuery.trim()) return organizers;
-
-    const query = searchQuery.toLowerCase();
-    return organizers.filter(
-      (organizer: Organizer) =>
-        organizer.business_name?.toLowerCase().includes(query) ||
-        organizer.description?.toLowerCase().includes(query) ||
-        organizer.location?.toLowerCase().includes(query)
-    );
-  }, [organizers, searchQuery]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -154,16 +155,18 @@ export default function OrganizersPage() {
           {/* Results Count */}
           <div className="mb-8">
             <p className="text-gray-600">
-              {filteredOrganizers.length} organizer
-              {filteredOrganizers.length !== 1 ? "s" : ""} found
+              {organizers.length} organizer
+              {organizers.length !== 1 ? "s" : ""} found
               {searchQuery && (
-                <span className="ml-2 text-sm">for "{searchQuery}"</span>
+                <span className="ml-2 text-sm">
+                  for &quot;{searchQuery}&quot;
+                </span>
               )}
             </p>
           </div>
 
           {/* Organizers Grid */}
-          {filteredOrganizers.length === 0 ? (
+          {organizers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -177,7 +180,10 @@ export default function OrganizersPage() {
               {searchQuery && (
                 <Button
                   variant="outline"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDebouncedSearchQuery("");
+                  }}
                   className="mt-4"
                 >
                   Clear search
@@ -186,7 +192,7 @@ export default function OrganizersPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredOrganizers.map((organizer: Organizer) => (
+              {organizers.map((organizer: Organizer) => (
                 <Card
                   key={organizer.id}
                   className="overflow-hidden hover:shadow-lg transition-shadow duration-300"
@@ -194,19 +200,22 @@ export default function OrganizersPage() {
                   {/* Organizer Image */}
                   <div className="relative h-48 bg-gradient-to-br from-blue-500 to-purple-600">
                     {organizer.logo_url ? (
-                      <img
+                      <Image
                         src={organizer.logo_url}
                         alt={organizer.business_name || organizer.name}
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = "none";
-                          target.nextElementSibling?.classList.remove("hidden");
+                          target.parentElement
+                            ?.querySelector(".fallback-icon")
+                            ?.classList.remove("hidden");
                         }}
                       />
                     ) : null}
                     <div
-                      className={`w-full h-full flex items-center justify-center ${
+                      className={`w-full h-full flex items-center justify-center fallback-icon ${
                         organizer.logo_url ? "hidden" : ""
                       }`}
                     >

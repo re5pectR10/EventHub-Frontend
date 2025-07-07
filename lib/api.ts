@@ -684,14 +684,32 @@ class ApiService {
   }
 
   // Organizers - migrated to Next.js API routes
-  async getOrganizers(): Promise<Organizer[]> {
+  async getOrganizers(params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<Organizer[]> {
     try {
-      const response = await fetch("/api/organizers", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const searchParams = new URLSearchParams();
+
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        });
+      }
+
+      const queryString = searchParams.toString();
+      const response = await fetch(
+        `/api/organizers${queryString ? `?${queryString}` : ""}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -922,20 +940,39 @@ class ApiService {
 
   // Bookings
   // Bookings - migrated to Next.js API routes
-  async getBookings(): Promise<ApiResponse<Booking[]>> {
+  async getBookings(params?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<Booking[]>> {
     try {
       const {
         data: { session },
       } = await this.supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch("/api/bookings", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-      });
+      const searchParams = new URLSearchParams();
+
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        });
+      }
+
+      const queryString = searchParams.toString();
+      const response = await fetch(
+        `/api/bookings${queryString ? `?${queryString}` : ""}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
