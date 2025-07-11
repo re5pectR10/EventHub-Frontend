@@ -1,5 +1,5 @@
 # Supabase directory - contains migrations, functions, and config
-supabase/
+
 
 # Documentation files
 *.md
