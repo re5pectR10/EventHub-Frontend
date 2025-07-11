@@ -7,8 +7,8 @@ import type {
   Organizer,
   TicketType,
 } from "@/lib/types";
-import { createClient } from "@/utils/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "../utils/supabase/client";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
