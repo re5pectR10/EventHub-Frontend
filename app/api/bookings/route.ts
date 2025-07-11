@@ -79,11 +79,10 @@ export async function GET(request: NextRequest) {
       query = query.eq("status", status);
     }
 
-    // Apply search filter
+    // Apply search filter (search across customer and event data)
     if (search) {
-      // Search across event title, customer name, and location
       query = query.or(
-        `customer_name.ilike.%${search}%,events.title.ilike.%${search}%,events.location_name.ilike.%${search}%`
+        `customer_name.ilike.%${search}%,customer_email.ilike.%${search}%,events.title.ilike.%${search}%,events.location_name.ilike.%${search}%`
       );
     }
 

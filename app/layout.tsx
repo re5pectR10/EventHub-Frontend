@@ -6,13 +6,13 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Local Events Hub - Discover Amazing Local Experiences",
+  title: "Next1nTown - Discover Amazing Local Experiences",
   description:
     "Find and book unique local events, workshops, and activities in your area.",
   keywords: ["local events", "activities", "workshops", "booking", "community"],
-  authors: [{ name: "Local Events Hub Team" }],
+  authors: [{ name: "Next1nTown Team" }],
   openGraph: {
-    title: "Local Events Hub",
+    title: "Next1nTown",
     description: "Discover amazing local experiences",
     type: "website",
     locale: "en_US",

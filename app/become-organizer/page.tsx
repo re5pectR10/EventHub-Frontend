@@ -118,13 +118,13 @@ export default function BecomeOrganizerPage() {
   // Already an organizer
   if (existingOrganizer) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className="min-h-screen bg-background py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Card>
             <CardContent className="text-center py-12">
               <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                You're Already an Organizer!
+              <h2 className="text-2xl font-bold text-foreground mb-2">
+                You&apos;re Already an Organizer!
               </h2>
               <p className="text-gray-600 mb-6">
                 You already have an organizer profile. You can manage your
@@ -146,11 +146,11 @@ export default function BecomeOrganizerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Hero Section */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl font-bold text-foreground mb-4">
             Become an Event Organizer
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">

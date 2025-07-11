@@ -5,6 +5,7 @@ import { useState } from "react";
 import { NotificationProvider } from "@/components/ui/notification-provider";
 import { Header } from "@/components/layout/header";
 import { AuthProvider } from "@/components/providers/auth-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -27,12 +28,19 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Header />
-        {children}
-        <NotificationProvider />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Header />
+          {children}
+          <NotificationProvider />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

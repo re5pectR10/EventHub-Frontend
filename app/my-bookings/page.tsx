@@ -148,7 +148,7 @@ export default function MyBookingsPage() {
   // Loading state
   if (isLoadingUser || isLoadingBookings) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className="min-h-screen bg-background py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <div className="h-8 bg-gray-200 animate-pulse rounded w-48 mb-4" />
@@ -175,11 +175,11 @@ export default function MyBookingsPage() {
   // Error state
   if (bookingsError) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className="min-h-screen bg-background py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center py-12">
             <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold text-foreground mb-2">
               Failed to Load Bookings
             </h3>
             <p className="text-gray-600 mb-6">
@@ -196,11 +196,13 @@ export default function MyBookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My Bookings</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            My Bookings
+          </h1>
           <p className="text-gray-600">
             Manage and track all your event bookings in one place
           </p>
@@ -255,7 +257,7 @@ export default function MyBookingsPage() {
         {bookings.length === 0 ? (
           <div className="text-center py-12">
             <Receipt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold text-foreground mb-2">
               {searchQuery || statusFilter !== "all"
                 ? "No matching bookings found"
                 : "No bookings yet"}
@@ -294,7 +296,7 @@ export default function MyBookingsPage() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          <h3 className="text-lg font-semibold text-foreground mb-1">
                             {booking.events?.title}
                           </h3>
                           <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -333,7 +335,7 @@ export default function MyBookingsPage() {
                           <span className="font-medium text-gray-700">
                             Amount:
                           </span>
-                          <p className="text-gray-900 font-medium">
+                          <p className="text-foreground font-medium">
                             {formatCurrency(booking.total_price)}
                           </p>
                         </div>

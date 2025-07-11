@@ -1,65 +1,48 @@
 import { Suspense } from "react";
 import { Footer } from "@/components/layout/footer";
 import { EventsClient } from "@/components/events/events-client";
-import { getServerSupabaseClient } from "@/lib/supabase-server";
+import { LocationBanner } from "@/components/location/location-banner";
+import { apiService } from "@/lib/api";
 import type { Category, Event } from "@/lib/types";
 
-// Enable ISR - revalidate every 30 minutes
+// Enable ISR - revalidate every 30 minutes for static content
 export const revalidate = 1800;
 
-async function getInitialData(): Promise<{
+async function getStaticData(): Promise<{
   events: Event[];
   categories: Category[];
   totalEvents: number;
 }> {
   try {
-    const supabaseServer = await getServerSupabaseClient();
+    // Fetch initial events (first page, default sort) for static generation
+    const [eventsResponse, categoriesResponse] = await Promise.all([
+      apiService.getEvents({
+        page: 1,
+        limit: 12,
+        sort: "date_asc",
+      }),
+      apiService.getCategories(),
+    ]);
 
-    // Fetch initial events (first page, default sort)
-    const { data: events, error: eventsError } = await supabaseServer
-      .from("events")
-      .select(
-        `
-        *,
-        organizers(id, business_name, contact_email, description, website),
-        event_categories(name, slug),
-        event_images(image_url, alt_text, display_order, is_primary),
-        ticket_types(id, name, price, quantity_available, quantity_sold)
-      `
-      )
-      .eq("status", "published")
-      .order("start_date", { ascending: true })
-      .range(0, 11); // First 12 events
-
-    // Fetch all categories for filtering
-    const { data: categories, error: categoriesError } = await supabaseServer
-      .from("event_categories")
-      .select("*")
-      .order("name", { ascending: true });
-
-    // Get total count of published events
-    const { count: totalEvents, error: countError } = await supabaseServer
-      .from("events")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "published");
-
-    if (eventsError) {
-      console.error("Events fetch error:", eventsError);
+    // Handle events response
+    if (eventsResponse.error) {
+      console.error("Error fetching events:", eventsResponse.error);
+      throw new Error(eventsResponse.error);
     }
-    if (categoriesError) {
-      console.error("Categories fetch error:", categoriesError);
-    }
-    if (countError) {
-      console.error("Count fetch error:", countError);
+
+    // Handle categories response
+    if (categoriesResponse.error) {
+      console.error("Error fetching categories:", categoriesResponse.error);
+      throw new Error(categoriesResponse.error);
     }
 
     return {
-      events: events || [],
-      categories: categories || [],
-      totalEvents: totalEvents || 0,
+      events: eventsResponse.events || [],
+      categories: categoriesResponse.categories || [],
+      totalEvents: eventsResponse.pagination?.total || 0,
     };
   } catch (error) {
-    console.error("Data fetch error:", error);
+    console.error("Error in getStaticData:", error);
     return {
       events: [],
       categories: [],
@@ -69,96 +52,98 @@ async function getInitialData(): Promise<{
 }
 
 export async function generateMetadata() {
-  const { events, categories } = await getInitialData();
-
-  const categoryNames = categories
-    .slice(0, 5)
-    .map((cat) => cat.name)
-    .join(", ");
-
   return {
     title: "Local Events | Discover Amazing Events Near You",
-    description: `Discover ${events.length}+ local events. Browse ${categories.length} categories including ${categoryNames}. Find concerts, workshops, sports events, and more.`,
+    description:
+      "Discover local events, activities, concerts, workshops, sports events, and more in your area.",
     keywords:
       "local events, activities, concerts, workshops, sports events, community events, entertainment",
     openGraph: {
       title: "Local Events | Discover Amazing Events Near You",
-      description: `Discover ${events.length}+ local events across ${categories.length} categories.`,
+      description:
+        "Discover local events, activities, concerts, workshops, sports events, and more.",
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: "Local Events | Discover Amazing Events Near You",
-      description: `Discover ${events.length}+ local events across ${categories.length} categories.`,
+      title: "Local Events",
+      description: "Discover amazing events near you",
     },
   };
 }
 
-function EventsLoading() {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main className="flex-1">
-        {/* Hero Section Skeleton */}
-        <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12">
-          <div className="container-clean">
-            <div className="max-w-3xl mx-auto text-center">
-              <div className="h-10 bg-gray-200 rounded w-80 mx-auto mb-4 animate-pulse"></div>
-              <div className="h-6 bg-gray-200 rounded w-96 mx-auto mb-8 animate-pulse"></div>
-              <div className="h-12 bg-gray-200 rounded w-full max-w-2xl mx-auto animate-pulse"></div>
-            </div>
-          </div>
-        </section>
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  // Await the searchParams in Next.js 15+
+  const resolvedSearchParams = await searchParams;
 
-        {/* Controls Skeleton */}
-        <section className="border-b bg-white py-4">
-          <div className="container-clean">
-            <div className="flex items-center justify-between mb-4">
-              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse"></div>
-              <div className="h-10 bg-gray-200 rounded w-48 animate-pulse"></div>
-            </div>
-          </div>
-        </section>
+  // Check if this is a search/filter request (requires CSR)
+  const hasSearchParams = Object.keys(resolvedSearchParams).length > 0;
 
-        {/* Events Grid Skeleton */}
-        <section className="py-8">
-          <div className="container-clean">
-            <div className="mb-6">
-              <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="border rounded-lg overflow-hidden animate-pulse"
-                >
-                  <div className="bg-gray-200 h-48"></div>
-                  <div className="p-4">
-                    <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded mb-2 w-2/3"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+  // If there are search params, use pure CSR approach
+  if (hasSearchParams) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <main className="flex-1">
+          <LocationBanner />
+          <Suspense
+            fallback={
+              <div className="container mx-auto px-4 py-12">
+                <div className="animate-pulse space-y-8">
+                  <div className="text-center">
+                    <div className="h-8 bg-gray-200 rounded w-64 mx-auto mb-4" />
+                    <div className="h-4 bg-gray-200 rounded w-96 mx-auto" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="h-96 bg-gray-200 rounded" />
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
-  );
-}
+              </div>
+            }
+          >
+            <EventsClient mode="csr" searchParams={resolvedSearchParams} />
+          </Suspense>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
-export default async function EventsPage() {
-  const { events, categories, totalEvents } = await getInitialData();
+  // For initial load without search params, use SSG/ISR data
+  const staticData = await getStaticData();
 
   return (
     <div className="min-h-screen flex flex-col">
       <main className="flex-1">
-        <Suspense fallback={<EventsLoading />}>
+        <LocationBanner />
+        <Suspense
+          fallback={
+            <div className="container mx-auto px-4 py-12">
+              <div className="animate-pulse space-y-8">
+                <div className="text-center">
+                  <div className="h-8 bg-gray-200 rounded w-64 mx-auto mb-4" />
+                  <div className="h-4 bg-gray-200 rounded w-96 mx-auto" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-96 bg-gray-200 rounded" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          }
+        >
           <EventsClient
-            initialEvents={events}
-            initialCategories={categories}
-            totalInitialEvents={totalEvents}
+            mode="hybrid"
+            initialEvents={staticData.events}
+            initialCategories={staticData.categories}
+            initialTotal={staticData.totalEvents}
+            searchParams={resolvedSearchParams}
           />
         </Suspense>
       </main>

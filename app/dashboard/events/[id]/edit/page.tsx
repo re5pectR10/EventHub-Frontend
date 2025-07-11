@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { LocationInput } from "@/components/ui/location-input";
+import { MapLocationPicker } from "@/components/ui/map-location-picker";
 import { DashboardNav } from "@/components/layout/dashboard-nav";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -25,11 +27,13 @@ import {
   useDeleteTicket,
 } from "@/lib/api";
 import type { Event, EventFormData, TicketTypeFormData } from "@/lib/types";
+import type { LocationData, MapLocationData } from "@/lib/types/google-maps";
 
 // Interface for event data from API that includes all necessary properties
 interface EventWithFormData extends Event {
   category_id: string;
   capacity: number;
+  location_coordinates?: { lat: number; lng: number };
 }
 
 // Alias for local usage
@@ -50,6 +54,7 @@ export default function EditEventPage() {
     capacity: 100,
     featured: false,
     status: "draft",
+    location_coordinates: undefined,
   });
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +62,9 @@ export default function EditEventPage() {
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const hasInitializedEventData = useRef(false);
+  const hasInitializedTickets = useRef(false);
 
   const router = useRouter();
   const params = useParams();
@@ -104,7 +112,7 @@ export default function EditEventPage() {
 
   // Update form data when event data is loaded
   useEffect(() => {
-    if (eventData) {
+    if (eventData && !hasInitializedEventData.current) {
       // Type the eventData properly - it should have category_id from the database
       const typedEventData = eventData as EventWithFormData;
 
@@ -121,13 +129,20 @@ export default function EditEventPage() {
         capacity: typedEventData.capacity || 100,
         featured: eventData.featured || false,
         status: eventData.status || "draft",
+        location_coordinates: typedEventData.location_coordinates || undefined,
       });
+
+      hasInitializedEventData.current = true;
     }
   }, [eventData]);
 
   // Update ticket types when existing tickets are loaded
   useEffect(() => {
-    if (existingTickets) {
+    if (
+      existingTickets &&
+      existingTickets.length > 0 &&
+      !hasInitializedTickets.current
+    ) {
       setTicketTypes(
         existingTickets.map((ticket) => ({
           id: ticket.id,
@@ -140,6 +155,7 @@ export default function EditEventPage() {
           max_per_order: ticket.max_per_order || 10,
         }))
       );
+      hasInitializedTickets.current = true;
     }
   }, [existingTickets]);
 
@@ -315,6 +331,42 @@ export default function EditEventPage() {
     value: string | number | boolean
   ) => {
     setEvent((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Handle location changes from LocationInput component
+  const handleLocationChange = (location: LocationData) => {
+    setEvent((prev) => ({
+      ...prev,
+      location_name: location.name,
+      location_address: location.address,
+      location_coordinates: location.coordinates,
+    }));
+
+    // Clear validation errors
+    setValidationErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.location_name;
+      delete newErrors.location_address;
+      return newErrors;
+    });
+  };
+
+  // Handle location selection from map
+  const handleMapLocationSelect = (location: MapLocationData) => {
+    setEvent((prev) => ({
+      ...prev,
+      location_name: location.name || prev.location_name,
+      location_address: location.address,
+      location_coordinates: location.coordinates,
+    }));
+    setIsMapOpen(false);
+
+    // Clear validation errors
+    setValidationErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors.location_address;
+      return newErrors;
+    });
   };
 
   if (
@@ -555,79 +607,33 @@ export default function EditEventPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="location_name"
-                    className="text-sm font-medium"
-                  >
-                    Venue Name *
-                  </label>
-                  <Input
-                    id="location_name"
-                    type="text"
-                    value={event.location_name}
-                    onChange={(e) =>
-                      handleInputChange("location_name", e.target.value)
-                    }
-                    placeholder="Enter venue name"
-                    required
-                    className={
-                      validationErrors.location_name ? "border-red-500" : ""
-                    }
-                  />
-                  {validationErrors.location_name && (
-                    <p className="text-sm text-red-600">
-                      {validationErrors.location_name}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="capacity" className="text-sm font-medium">
-                    Capacity
-                  </label>
-                  <Input
-                    id="capacity"
-                    type="number"
-                    value={event.capacity}
-                    onChange={(e) =>
-                      handleInputChange(
-                        "capacity",
-                        parseInt(e.target.value) || 0
-                      )
-                    }
-                    placeholder="Maximum attendees"
-                    min="1"
-                  />
-                </div>
-              </div>
+              {/* Location Section */}
+              <LocationInput
+                value={{
+                  location_name: event.location_name,
+                  location_address: event.location_address,
+                  location_coordinates: event.location_coordinates,
+                }}
+                onChange={handleLocationChange}
+                onMapClick={() => setIsMapOpen(true)}
+                nameError={validationErrors.location_name}
+                addressError={validationErrors.location_address}
+              />
 
               <div className="space-y-2">
-                <label
-                  htmlFor="location_address"
-                  className="text-sm font-medium"
-                >
-                  Venue Address *
+                <label htmlFor="capacity" className="text-sm font-medium">
+                  Capacity
                 </label>
                 <Input
-                  id="location_address"
-                  type="text"
-                  value={event.location_address}
+                  id="capacity"
+                  type="number"
+                  value={event.capacity}
                   onChange={(e) =>
-                    handleInputChange("location_address", e.target.value)
+                    handleInputChange("capacity", parseInt(e.target.value) || 0)
                   }
-                  placeholder="Enter venue address"
-                  required
-                  className={
-                    validationErrors.location_address ? "border-red-500" : ""
-                  }
+                  placeholder="Maximum attendees"
+                  min="1"
                 />
-                {validationErrors.location_address && (
-                  <p className="text-sm text-red-600">
-                    {validationErrors.location_address}
-                  </p>
-                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -857,6 +863,16 @@ export default function EditEventPage() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Map Location Picker Modal */}
+        {isMapOpen && (
+          <MapLocationPicker
+            isOpen={isMapOpen}
+            onClose={() => setIsMapOpen(false)}
+            onLocationSelect={handleMapLocationSelect}
+            initialLocation={event.location_coordinates}
+          />
+        )}
       </div>
     </div>
   );

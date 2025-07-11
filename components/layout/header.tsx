@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Menu, X, User, LogOut } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Menu, X, LogOut } from "lucide-react";
 import { useAuth, useAuthActions } from "@/lib/stores/auth-store";
+import Image from "next/image";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -22,29 +24,44 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-sm border-b border-border/50">
       <div className="container-clean">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo - Simplified */}
-          <Link href="/" className="flex items-center">
-            <span className="text-2xl font-bold text-foreground">EventHub</span>
+        <div className="flex h-16 items-center justify-between gap-4">
+          {/* Logo - Always visible with responsive sizing */}
+          <Link href="/" className="flex items-center flex-shrink-0">
+            <Image
+              src="/assets/logo/next1ntown-light.svg"
+              alt="Next1nTown"
+              width={140}
+              height={32}
+              className="h-6 w-auto sm:h-8 dark:hidden"
+              priority
+            />
+            <Image
+              src="/assets/logo/next1ntown-dark.svg"
+              alt="Next1nTown"
+              width={140}
+              height={32}
+              className="h-6 w-auto sm:h-8 hidden dark:block"
+              priority
+            />
           </Link>
 
-          {/* Desktop Navigation - Cleaner spacing */}
-          <nav className="hidden md:flex items-center space-x-8">
+          {/* Desktop Navigation - Responsive spacing */}
+          <nav className="hidden md:flex items-center space-x-4 lg:space-x-6 xl:space-x-8">
             <Link
               href="/events"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 whitespace-nowrap"
             >
               Events
             </Link>
             <Link
               href="/categories"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 whitespace-nowrap"
             >
               Categories
             </Link>
             <Link
               href="/organizers"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 whitespace-nowrap"
             >
               Organizers
             </Link>
@@ -73,40 +90,43 @@ export function Header() {
             )}
           </nav>
 
-          {/* Desktop Auth Buttons - Cleaner design */}
-          <div className="hidden md:flex items-center space-x-3">
-            {isLoading ? (
-              <div className="w-20 h-8 bg-gray-200 animate-pulse rounded" />
-            ) : user ? (
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-muted-foreground">
-                  Welcome, {user.user_metadata?.first_name || user.email}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSignOut}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  asChild
-                >
-                  <Link href="/auth/signin">Sign In</Link>
-                </Button>
-                <Button size="sm" className="btn-clean btn-primary" asChild>
-                  <Link href="/auth/signup">Sign Up</Link>
-                </Button>
-              </>
-            )}
+          {/* Desktop Auth Buttons - Always show theme toggle */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <ThemeToggle />
+            <div className="hidden md:flex items-center space-x-3">
+              {isLoading ? (
+                <div className="w-20 h-8 bg-gray-200 animate-pulse rounded" />
+              ) : user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-muted-foreground">
+                    Welcome, {user.user_metadata?.first_name || user.email}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    asChild
+                  >
+                    <Link href="/auth/signin">Sign In</Link>
+                  </Button>
+                  <Button size="sm" className="btn-clean btn-primary" asChild>
+                    <Link href="/auth/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -176,6 +196,9 @@ export function Header() {
               )}
             </nav>
             <div className="pt-4 space-y-3 border-t border-border/50">
+              <div className="flex justify-center">
+                <ThemeToggle />
+              </div>
               {isLoading ? (
                 <div className="w-full h-8 bg-gray-200 animate-pulse rounded" />
               ) : user ? (

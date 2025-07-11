@@ -1,0 +1,14 @@
+<svg width="235" height="67" viewBox="0 0 235 67" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Next1nTown logo (dark)</title>
+  <desc id="desc">Wordmark with map pin replacing the characters 1n. Dark variant.</desc>
+  <!-- Word: Next -->
+  <text x="0" y="36" font-family="Inter, Poppins, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="600" fill="#FFFFFF">Next</text>
+  <!-- Map pin with "1n" inside -->
+  <g transform="translate(90,8)">
+    <path transform="translate(20,15) scale(1.7) translate(-20,-15)" d="M20 2C12.82 2 7 7.82 7 15c0 9.25 13 25 13 25s13-15.75 13-25C33 7.82 27.18 2 20 2z" fill="#7C3AED"/>
+    <text x="4" y="17" font-size="28" font-family="Inter, Poppins, 'Helvetica Neue', Arial, sans-serif" font-weight="700" fill="#FFFFFF" dominant-baseline="middle">1n</text>
+  </g>
+
+  <!-- Word: Town -->
+  <text x="132" y="36" font-family="Inter, Poppins, 'Helvetica Neue', Arial, sans-serif" font-size="40" font-weight="600" fill="#FFFFFF">Town</text>
+</svg> 

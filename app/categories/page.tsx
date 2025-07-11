@@ -96,7 +96,7 @@ export default async function CategoriesPage() {
           <section className="bg-gradient-to-r from-primary/10 to-primary/5 py-12">
             <div className="container-clean">
               <div className="max-w-3xl mx-auto text-center">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                <h1 className="text-4xl font-bold text-foreground mb-4">
                   Event Categories
                 </h1>
                 <p className="text-lg text-gray-600 mb-8">
@@ -108,7 +108,7 @@ export default async function CategoriesPage() {
 
           <section className="container-clean py-12">
             <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 No categories available
               </h3>
               <p className="text-gray-600">

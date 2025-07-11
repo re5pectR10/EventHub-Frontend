@@ -84,6 +84,28 @@ interface CreateTicketData {
 class ApiService {
   private supabase = createClient();
 
+  // Helper function to get the base URL for API calls
+  private getBaseUrl(): string {
+    // Check if we're running on the server
+    if (typeof window === "undefined") {
+      // Server-side: use environment variables or default
+      if (process.env.NEXT_PUBLIC_DOMAIN) {
+        return process.env.NEXT_PUBLIC_DOMAIN;
+      }
+      if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+      }
+      if (process.env.NEXTAUTH_URL) {
+        return process.env.NEXTAUTH_URL;
+      }
+      // Fallback for local development
+      return "http://localhost:3000";
+    }
+
+    // Client-side: use current origin
+    return window.location.origin;
+  }
+
   private async fetchWithAuth<T>(
     functionName: string,
     path: string,
@@ -144,8 +166,9 @@ class ApiService {
       }
 
       const queryString = searchParams.toString();
+      const baseUrl = this.getBaseUrl();
       const response = await fetch(
-        `/api/events${queryString ? `?${queryString}` : ""}`,
+        `${baseUrl}/api/events${queryString ? `?${queryString}` : ""}`,
         {
           method: "GET",
           headers: {
@@ -173,7 +196,8 @@ class ApiService {
 
   async getFeaturedEvents(): Promise<ApiResponse<Event[]>> {
     try {
-      const response = await fetch("/api/events/featured", {
+      const baseUrl = this.getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/events/featured`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -191,6 +215,46 @@ class ApiService {
       return data;
     } catch (error) {
       console.error("Featured Events API Error:", error);
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  async getSuggestedEvents(params?: { limit?: number; page?: number }): Promise<
+    ApiResponse<Event[]> & {
+      userLocation?: { country?: string; region?: string; city?: string };
+    }
+  > {
+    try {
+      const searchParams = new URLSearchParams({
+        suggested: "true",
+        limit: String(params?.limit || 6),
+        page: String(params?.page || 1),
+      });
+
+      const baseUrl = this.getBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/api/events?${searchParams.toString()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `HTTP error! status: ${response.status}, message: ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Suggested Events API Error:", error);
       return {
         error: error instanceof Error ? error.message : "Unknown error",
       };
@@ -659,7 +723,8 @@ class ApiService {
   // Categories - migrated to Next.js API route
   async getCategories(): Promise<ApiResponse<Category[]>> {
     try {
-      const response = await fetch("/api/categories", {
+      const baseUrl = this.getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/categories`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -1201,6 +1266,24 @@ export function useFeaturedEvents() {
         throw new Error(response.error);
       }
       return response.events || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useSuggestedEvents(params?: { limit?: number; page?: number }) {
+  return useQuery({
+    queryKey: ["events", "suggested", params],
+    queryFn: async () => {
+      const response = await apiService.getSuggestedEvents(params);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return {
+        events: response.events || [],
+        userLocation: response.userLocation,
+      };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,

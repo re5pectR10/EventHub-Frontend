@@ -98,9 +98,9 @@ export const useAuthStore = create<AuthStore>()(
         } = await supabase.auth.getUser();
 
         if (error) {
-          console.error("Auth initialization error:", error);
+          // console.error("Auth initialization error:", error);
           set({
-            error: error.message,
+            // error: error.message,
             user: null,
             isLoading: false,
             isInitialized: true,

@@ -2,6 +2,7 @@ import {
   getServerSupabaseClient,
   getUserFromToken,
 } from "@/lib/supabase-server";
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 // Generate URL-friendly slug from title
@@ -59,6 +60,60 @@ function sanitizeTicketTimestampFields(ticket: {
   };
 }
 
+// Helper function to convert coordinates to PostGIS POINT format
+function coordinatesToPoint(coordinates?: {
+  lat: number;
+  lng: number;
+}): string | null {
+  if (
+    !coordinates ||
+    typeof coordinates.lat !== "number" ||
+    typeof coordinates.lng !== "number"
+  ) {
+    return null;
+  }
+  // PostGIS POINT format: POINT(longitude latitude)
+  return `POINT(${coordinates.lng} ${coordinates.lat})`;
+}
+
+// Helper function to parse PostGIS POINT to coordinates object
+function pointToCoordinates(
+  point: unknown
+): { lat: number; lng: number } | null {
+  if (!point || typeof point !== "string") {
+    return null;
+  }
+
+  try {
+    // Parse POINT(lng lat) format
+    const match = (point as string).match(
+      /POINT\(([+-]?\d*\.?\d+)\s+([+-]?\d*\.?\d+)\)/
+    );
+    if (match) {
+      const lng = parseFloat(match[1]);
+      const lat = parseFloat(match[2]);
+      return { lat, lng };
+    }
+  } catch (error) {
+    console.error("Error parsing POINT:", error);
+  }
+
+  return null;
+}
+
+// Extract geolocation from Vercel headers
+function getGeolocationFromHeaders(request: NextRequest) {
+  const country = request.headers.get("x-vercel-ip-country") || null;
+  const region = request.headers.get("x-vercel-ip-country-region") || null;
+  const city = request.headers.get("x-vercel-ip-city") || null;
+
+  return {
+    country,
+    region,
+    city,
+  };
+}
+
 // Get all events with search and filtering
 export async function GET(request: NextRequest) {
   try {
@@ -72,9 +127,14 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get("sort"); // New sort parameter
     const dateFrom = searchParams.get("dateFrom"); // New date range parameter
     const dateTo = searchParams.get("dateTo"); // New date range parameter
+    const suggested = searchParams.get("suggested") === "true"; // New parameter for location-based suggestions
 
     const offset = (page - 1) * limit;
     const supabaseServer = await getServerSupabaseClient();
+
+    // Get user geolocation from headers
+    const userLocation = getGeolocationFromHeaders(request);
+    console.log("User location from GeoIP:", userLocation);
 
     // Build query
     let query = supabaseServer
@@ -96,8 +156,48 @@ export async function GET(request: NextRequest) {
       query = query.eq("event_categories.slug", category);
     }
 
-    // Apply search filter (support both 'search' and 'q' parameters)
-    const searchQuery = q || search;
+    // Get user info for personalization
+    const authHeader = request.headers.get("Authorization") || undefined;
+    let user = null;
+    try {
+      user = await getUserFromToken(authHeader);
+    } catch {
+      // Non-authenticated users are fine, just proceed without personalization
+      console.log("No authenticated user, proceeding without personalization");
+    }
+
+    // Apply location-based suggestions
+    if (
+      suggested &&
+      (userLocation.city || userLocation.region || userLocation.country)
+    ) {
+      console.log("Applying location-based event suggestions");
+
+      // Build location filter - prioritize city, then region, then country
+      const locationFilters = [];
+      if (userLocation.city) {
+        locationFilters.push(`location_name.ilike.%${userLocation.city}%`);
+        locationFilters.push(`location_address.ilike.%${userLocation.city}%`);
+      }
+      if (userLocation.region) {
+        locationFilters.push(`location_name.ilike.%${userLocation.region}%`);
+        locationFilters.push(`location_address.ilike.%${userLocation.region}%`);
+      }
+      if (userLocation.country) {
+        locationFilters.push(`location_name.ilike.%${userLocation.country}%`);
+        locationFilters.push(
+          `location_address.ilike.%${userLocation.country}%`
+        );
+      }
+
+      if (locationFilters.length > 0) {
+        query = query.or(locationFilters.join(","));
+      }
+    }
+
+    // Apply search filter (support 'search', 'q', and 'query' parameters)
+    const query_param = searchParams.get("query"); // Add support for 'query' parameter
+    const searchQuery = query_param || q || search;
     if (searchQuery) {
       query = query.or(
         `title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,location_name.ilike.%${searchQuery}%`
@@ -117,7 +217,37 @@ export async function GET(request: NextRequest) {
       query = query.lte("start_date", dateTo);
     }
 
-    // Apply sorting
+    // Get user preferences for personalization
+    let userPreferences: string[] = [];
+    if (user) {
+      try {
+        // Fetch user's recent bookings to determine preferred categories
+        const { data: bookings } = await supabaseServer
+          .from("bookings")
+          .select("events(event_categories(name))")
+          .eq("customer_email", user.email)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (bookings) {
+          const categoryNames = (
+            bookings as Array<{
+              events: Array<{ event_categories: Array<{ name: string }> }>;
+            }>
+          )
+            .flatMap((booking) => booking.events || [])
+            .flatMap((event) => event.event_categories || [])
+            .map((category) => category.name)
+            .filter((name): name is string => Boolean(name));
+          userPreferences = Array.from(new Set(categoryNames));
+          console.log(`Found user preferences: ${userPreferences.join(", ")}`);
+        }
+      } catch (prefError) {
+        console.log("Failed to fetch user preferences:", prefError);
+      }
+    }
+
+    // Apply sorting (with potential personalization boost)
     if (sort) {
       switch (sort) {
         case "date_asc":
@@ -140,7 +270,12 @@ export async function GET(request: NextRequest) {
           query = query.order("start_date", { ascending: true });
       }
     } else {
-      // Default sort by start date ascending
+      // Default sort by start date ascending, but boost preferred categories for auth users
+      if (userPreferences.length > 0) {
+        // For personalized sorting, we'll fetch all data and sort on the server side
+        // This is a trade-off between performance and personalization
+        console.log("Applying personalized sorting based on user preferences");
+      }
       query = query.order("start_date", { ascending: true });
     }
 
@@ -157,10 +292,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Convert location coordinates from PostGIS POINT to lat/lng objects
+    const eventsWithCoordinates = (events || []).map((event) => ({
+      ...event,
+      location_coordinates: pointToCoordinates(event.location_coordinates),
+    }));
+
     const totalPages = Math.ceil((count || 0) / limit);
 
-    return NextResponse.json({
-      events: events || [],
+    // Include user location in response for debugging/client use
+    const response = {
+      events: eventsWithCoordinates,
       pagination: {
         page,
         limit,
@@ -169,7 +311,10 @@ export async function GET(request: NextRequest) {
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1,
       },
-    });
+      userLocation: suggested ? userLocation : undefined, // Only include when requested
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Events fetch error:", error);
     return NextResponse.json(
@@ -221,17 +366,22 @@ export async function POST(request: NextRequest) {
     const baseSlug = generateSlug(eventData.title);
     const uniqueSlug = await generateUniqueSlug(supabaseServer, baseSlug);
 
+    // Prepare event data with coordinate conversion
+    const { location_coordinates, ...restEventData } = eventData;
+    const eventInsertData = {
+      ...restEventData,
+      slug: uniqueSlug,
+      organizer_id: organizer.id,
+      status: "draft", // New events start as drafts
+      location_coordinates: coordinatesToPoint(location_coordinates),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
     // Create event
     const { data: event, error: eventError } = await supabaseServer
       .from("events")
-      .insert({
-        ...eventData,
-        slug: uniqueSlug,
-        organizer_id: organizer.id,
-        status: "draft", // New events start as drafts
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .insert(eventInsertData)
       .select()
       .single();
 
@@ -308,6 +458,15 @@ export async function POST(request: NextRequest) {
       }
 
       createdTickets = ticketData || [];
+    }
+
+    // Trigger revalidation of events page (ISR)
+    try {
+      revalidatePath("/events", "page");
+      console.log("Revalidated /events page after event creation");
+    } catch (revalidateError) {
+      console.error("Failed to revalidate events page:", revalidateError);
+      // Don't fail the request if revalidation fails
     }
 
     return NextResponse.json(

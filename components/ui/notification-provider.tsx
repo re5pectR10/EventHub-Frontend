@@ -38,7 +38,7 @@ export function NotificationProvider() {
       case "info":
         return "bg-blue-50 border-blue-200";
       default:
-        return "bg-gray-50 border-gray-200";
+        return "bg-muted border-border";
     }
   };
 

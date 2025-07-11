@@ -3,7 +3,49 @@ import {
   getUserFromToken,
 } from "@/lib/supabase-server";
 import { Database } from "@/lib/types";
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+
+// Helper function to convert coordinates to PostGIS POINT format
+function coordinatesToPoint(coordinates?: {
+  lat: number;
+  lng: number;
+}): string | null {
+  if (
+    !coordinates ||
+    typeof coordinates.lat !== "number" ||
+    typeof coordinates.lng !== "number"
+  ) {
+    return null;
+  }
+  // PostGIS POINT format: POINT(longitude latitude)
+  return `POINT(${coordinates.lng} ${coordinates.lat})`;
+}
+
+// Helper function to parse PostGIS POINT to coordinates object
+function pointToCoordinates(
+  point: unknown
+): { lat: number; lng: number } | null {
+  if (!point || typeof point !== "string") {
+    return null;
+  }
+
+  try {
+    // Parse POINT(lng lat) format
+    const match = (point as string).match(
+      /POINT\(([+-]?\d*\.?\d+)\s+([+-]?\d*\.?\d+)\)/
+    );
+    if (match) {
+      const lng = parseFloat(match[1]);
+      const lat = parseFloat(match[2]);
+      return { lat, lng };
+    }
+  } catch (error) {
+    console.error("Error parsing POINT:", error);
+  }
+
+  return null;
+}
 
 // Type for the complete event with all nested relations as returned by our Supabase query
 interface EventWithAllRelations {
@@ -133,8 +175,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         `[UNIFIED ROUTE] User ${user.id} is the organizer of event: ${typedEvent.title}`
       );
       console.log(`[UNIFIED ROUTE] Event status: ${typedEvent.status}`);
+
+      // Convert location coordinates from PostGIS POINT to lat/lng object
+      const eventWithCoordinates = {
+        ...typedEvent,
+        location_coordinates: pointToCoordinates(
+          typedEvent.location_coordinates
+        ),
+      };
+
       // Organizer can see their own event regardless of status
-      return NextResponse.json({ event: typedEvent });
+      return NextResponse.json({ event: eventWithCoordinates });
     }
 
     // For non-organizers, only show published events
@@ -145,8 +196,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
+    // Convert location coordinates from PostGIS POINT to lat/lng object
+    const eventWithCoordinates = {
+      ...typedEvent,
+      location_coordinates: pointToCoordinates(typedEvent.location_coordinates),
+    };
+
     console.log(`[UNIFIED ROUTE] Found published event: ${typedEvent.title}`);
-    return NextResponse.json({ event: typedEvent });
+    return NextResponse.json({ event: eventWithCoordinates });
   } catch (error) {
     console.error("[UNIFIED ROUTE] Event fetch error:", error);
     return NextResponse.json(
@@ -212,13 +269,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // Prepare update data with coordinate conversion
+    const { location_coordinates, ...restUpdateData } = updateData;
+    const eventUpdateData = {
+      ...restUpdateData,
+      location_coordinates: coordinatesToPoint(location_coordinates),
+      updated_at: new Date().toISOString(),
+    };
+
     // Update event
     const { data: updatedEvent, error: updateError } = await supabaseServer
       .from("events")
-      .update({
-        ...updateData,
-        updated_at: new Date().toISOString(),
-      })
+      .update(eventUpdateData)
       .eq("id", eventId)
       .select()
       .single();
@@ -229,6 +291,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { error: `Failed to update event: ${updateError.message}` },
         { status: 500 }
       );
+    }
+
+    // Trigger revalidation of events page (ISR)
+    try {
+      revalidatePath("/events", "page");
+      console.log("Revalidated /events page after event update");
+    } catch (revalidateError) {
+      console.error("Failed to revalidate events page:", revalidateError);
+      // Don't fail the request if revalidation fails
+    }
+
+    try {
+      revalidatePath(`/events/${eventId}`, "page");
+      console.log(`Revalidated /events/${eventId} page after event update`);
+    } catch (revalidateError) {
+      console.error("Failed to revalidate event page:", revalidateError);
+      // Don't fail the request if revalidation fails
     }
 
     // Type the updated event response
@@ -297,6 +376,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { error: `Failed to delete event: ${deleteError.message}` },
         { status: 500 }
       );
+    }
+
+    // Trigger revalidation of events page (ISR)
+    try {
+      revalidatePath("/events", "page");
+      console.log("Revalidated /events page after event deletion");
+    } catch (revalidateError) {
+      console.error("Failed to revalidate events page:", revalidateError);
+      // Don't fail the request if revalidation fails
     }
 
     return NextResponse.json({ message: "Event deleted successfully" });

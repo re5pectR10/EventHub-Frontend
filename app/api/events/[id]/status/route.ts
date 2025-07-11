@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import {
   getServerSupabaseClient,
   getUserFromToken,
@@ -81,6 +82,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { error: `Failed to update event status: ${updateError.message}` },
         { status: 500 }
       );
+    }
+
+    // Trigger revalidation of events page (ISR) - especially important for status changes
+    try {
+      revalidatePath("/events", "page");
+      console.log(
+        `Revalidated /events page after event status change to ${status}`
+      );
+    } catch (revalidateError) {
+      console.error("Failed to revalidate events page:", revalidateError);
+      // Don't fail the request if revalidation fails
     }
 
     return NextResponse.json({

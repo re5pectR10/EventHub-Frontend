@@ -5,13 +5,35 @@ import Link from "next/link";
 import { Calendar, MapPin, Users, Tag } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import type { Event, EventCardProps } from "@/lib/types";
+import type { EventCardProps } from "@/lib/types";
 
-export function EventCard({ event, className }: EventCardProps) {
+// Extended event type to include distance information from nearby events
+type EventWithDistance = EventCardProps["event"] & {
+  distance_meters?: number;
+};
+
+interface ExtendedEventCardProps extends Omit<EventCardProps, "event"> {
+  event: EventWithDistance;
+}
+
+// Support both original and extended props
+export function EventCard({
+  event,
+  className,
+}: EventCardProps | ExtendedEventCardProps) {
   const primaryImage =
     event.event_images?.find((img) => img.is_primary)?.image_url ||
     event.event_images?.[0]?.image_url ||
     "/placeholder-event.jpg";
+
+  // Format distance for display
+  const formatDistance = (meters: number) => {
+    if (meters < 1000) {
+      return `${Math.round(meters)}m`;
+    } else {
+      return `${(meters / 1000).toFixed(1)}km`;
+    }
+  };
 
   const startDate = new Date(event.start_date);
   const formatDate = (date: Date) => {
@@ -107,7 +129,19 @@ export function EventCard({ event, className }: EventCardProps) {
 
               <div className="flex items-center">
                 <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                <span className="line-clamp-1">{event.location_name}</span>
+                <span className="line-clamp-1">
+                  {event.location_name}
+                  {(event as EventWithDistance).distance_meters !==
+                    undefined && (
+                    <span className="ml-2 text-primary font-medium">
+                      (
+                      {formatDistance(
+                        (event as EventWithDistance).distance_meters!
+                      )}
+                      )
+                    </span>
+                  )}
+                </span>
               </div>
 
               <div className="flex items-center">

@@ -128,6 +128,10 @@ export interface EventFormData {
   end_time: string;
   location_name: string;
   location_address: string;
+  location_coordinates?: {
+    lat: number;
+    lng: number;
+  };
   category_id: string;
   capacity: number;
   featured: boolean;
@@ -187,7 +191,7 @@ export interface EventSearchParams {
   latitude?: number;
   longitude?: number;
   radius?: number;
-  sort?: "date_asc" | "date_desc" | "price_asc" | "price_desc";
+  sort?: "date_asc" | "date_desc" | "price_asc" | "price_desc" | "distance_asc";
   page?: number;
   limit?: number;
 }

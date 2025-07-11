@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/lib/api";
-import type { Category } from "@/lib/types";
 
 export function CategoryGrid() {
   const {
@@ -18,7 +17,9 @@ export function CategoryGrid() {
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.categories || [];
+      // Ensure we always return an array
+      const categoriesData = response.categories;
+      return Array.isArray(categoriesData) ? categoriesData : [];
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
@@ -65,13 +66,13 @@ export function CategoryGrid() {
         <div className="text-center mb-16">
           <h2 className="mb-6">Browse by Category</h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Find events that match your interests. Whether you're looking for
-            educational workshops, entertainment, or community gatherings, we
-            have something for everyone.
+            Find events that match your interests. Whether you&apos;re looking
+            for educational workshops, entertainment, or community gatherings,
+            we have something for everyone.
           </p>
         </div>
 
-        {categories.length === 0 ? (
+        {!Array.isArray(categories) || categories.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-muted-foreground text-lg">
               No categories available at the moment.
