@@ -323,8 +323,8 @@ export async function GET(request: NextRequest) {
 
     if (validatedQuery.category) {
       filteredEvents = filteredEvents.filter((event) =>
-        event.event_categories?.some(
-          (cat) => cat.slug === validatedQuery.category
+        (event as EventRecord).event_categories?.some(
+          (cat: { slug: string }) => cat.slug === validatedQuery.category
         )
       );
     }
