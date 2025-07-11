@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { DashboardNav } from "@/components/layout/dashboard-nav";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,27 +10,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
-  PlusIcon,
-  EditIcon,
-  TrashIcon,
-  EyeIcon,
-  TicketIcon,
-} from "lucide-react";
-import { DashboardNav } from "@/components/layout/dashboard-nav";
-import {
-  useOrganizerEvents,
   useDeleteEvent,
+  useOrganizerEvents,
   useUpdateEventStatus,
 } from "@/lib/api";
 import type { Event } from "@/lib/types";
+import {
+  EditIcon,
+  EyeIcon,
+  PlusIcon,
+  TicketIcon,
+  TrashIcon,
+} from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 export default function EventsManagementPage() {
   const [error, setError] = useState<string | null>(null);
-
-  const supabase = createClient();
-  const router = useRouter();
 
   // Use React Query hooks
   const {
