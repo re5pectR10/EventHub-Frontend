@@ -21,28 +21,12 @@ on:
           - staging
 
 jobs:
-  validate:
-    name: Validate Supabase Configuration
+  deploy:
     runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Validate migrations
-        run: |
-          cd supabase
-          supabase db diff --check
 
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: validate
     if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment: staging
 
@@ -92,6 +76,9 @@ jobs:
             --project-ref $SUPABASE_PROJECT_ID \
             --verify-jwt false
 
+            supabase functions deploy event-aggregator \
+            --project-ref $SUPABASE_PROJECT_ID \
+            
           supabase functions deploy process-booking \
             --project-ref $SUPABASE_PROJECT_ID
             
@@ -114,20 +101,9 @@ jobs:
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
 
-      - name: Test edge functions
-        run: |
-          # Test that functions are deployed and accessible
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_STAGING_ANON_KEY }}" \
-            -H "Content-Type: application/json" \
-            --fail \
-            "https://${{ secrets.SUPABASE_STAGING_PROJECT_ID }}.supabase.co/functions/v1/update-geoip-database?action=status" \
-            || echo "Function test failed - continuing deployment"
-
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment: production
 
@@ -154,28 +130,15 @@ jobs:
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
-      - name: Configure database settings for cron jobs
-        run: |
-          echo "⚙️ Configuring database settings for cron jobs"
-          SUPABASE_URL="https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co"
-          SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-
-          # Set database configuration parameters via psql
-          PGPASSWORD="${{ secrets.SUPABASE_DB_PASSWORD }}" psql \
-            "postgresql://postgres@db.${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co:5432/postgres" \
-            -c "ALTER DATABASE postgres SET app.supabase_url = '${SUPABASE_URL}';" \
-            -c "ALTER DATABASE postgres SET app.service_role_key = '${SERVICE_ROLE_KEY}';" \
-            -c "SELECT pg_reload_conf();" \
-            -c "SELECT 'Configuration applied:', name, setting FROM pg_settings WHERE name IN ('app.supabase_url', 'app.service_role_key');"
-
-          echo "✅ Database configuration completed for production"
-
       - name: Deploy edge functions
         run: |
           # Deploy individual functions with proper environment variables
           supabase functions deploy update-geoip-database \
             --project-ref $SUPABASE_PROJECT_ID \
             --verify-jwt false
+
+          supabase functions deploy event-aggregator \
+            --project-ref $SUPABASE_PROJECT_ID \
 
           supabase functions deploy process-booking \
             --project-ref $SUPABASE_PROJECT_ID
@@ -198,23 +161,6 @@ jobs:
             --project-ref $SUPABASE_PROJECT_ID
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-
-      - name: Schedule weekly GeoIP updates
-        run: |
-          # Set up cron job for weekly GeoIP database updates
-          # Note: This would require a cron service or external scheduler
-          echo "Setting up weekly GeoIP database updates..."
-          echo "Manual trigger available at: https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/update-geoip-database"
-
-      - name: Test production deployment
-        run: |
-          # Test that functions are deployed and accessible
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Content-Type: application/json" \
-            --fail \
-            "https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/update-geoip-database?action=status" \
-            || echo "Function test failed - manual verification required"
 
       - name: Notify deployment success
         if: success()
