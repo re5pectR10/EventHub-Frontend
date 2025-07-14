@@ -115,7 +115,7 @@ jobs:
 
       - name: Link to Supabase project
         run: |
-          echo "$SUPABASE_ACCESS_TOKEN" | supabase auth login --token
+          # echo "$SUPABASE_ACCESS_TOKEN" | supabase auth login --tokens
           supabase link --project-ref $SUPABASE_PROJECT_ID
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
