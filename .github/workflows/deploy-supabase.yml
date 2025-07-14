@@ -21,9 +21,6 @@ on:
           - staging
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
