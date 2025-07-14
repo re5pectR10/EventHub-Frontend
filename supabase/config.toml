@@ -90,13 +90,6 @@ enable_confirmations = false
 # admin_email = ""
 # sender_name = ""
 
-# Allow/disallow anonymous sign-ins to your project.
-[auth.anonymous]
-enabled = false
-
-[edge_functions]
-enabled = true
-
 [analytics]
 enabled = false
 
