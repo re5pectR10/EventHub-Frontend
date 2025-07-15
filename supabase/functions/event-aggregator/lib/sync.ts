@@ -4,7 +4,7 @@ import {
   DatabaseEvent,
   SyncResult,
   CategoryMapping,
-} from "../types/events";
+} from "../types/events.ts";
 
 // Helper function to generate a URL-friendly slug
 function generateSlug(title: string, sourceEventId: string): string {
