@@ -70,7 +70,6 @@ jobs:
           # Deploy individual functions with proper environment variables
           supabase functions deploy update-geoip-database \
             --project-ref $SUPABASE_PROJECT_ID \
-            --verify-jwt false
 
             supabase functions deploy event-aggregator \
             --project-ref $SUPABASE_PROJECT_ID \
@@ -130,7 +129,6 @@ jobs:
           # Deploy individual functions with proper environment variables
           supabase functions deploy update-geoip-database \
             --project-ref $SUPABASE_PROJECT_ID \
-            --verify-jwt false
 
           supabase functions deploy event-aggregator \
             --project-ref $SUPABASE_PROJECT_ID \
