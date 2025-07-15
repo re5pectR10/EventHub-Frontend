@@ -69,7 +69,7 @@ jobs:
         run: |
           # Deploy individual functions with proper environment variables
           supabase functions deploy update-geoip-database \
-            --project-ref $SUPABASE_PROJECT_ID \
+            --project-ref $SUPABASE_PROJECT_ID
 
             supabase functions deploy event-aggregator \
             --project-ref $SUPABASE_PROJECT_ID \
@@ -84,6 +84,23 @@ jobs:
             --project-ref $SUPABASE_PROJECT_ID
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+
+      - name: Schedule hourly event aggregation for Staging
+        run: |
+          echo "Scheduling event aggregator function to run hourly on staging"
+          PGPASSWORD="${{ secrets.SUPABASE_STAGING_DB_PASSWORD }}" psql \
+            "postgresql://postgres@db.${{ secrets.SUPABASE_STAGING_PROJECT_ID }}.supabase.co:5432/postgres" <<EOF
+          SELECT cron.schedule(
+              'event-aggregator-job',
+              '0 * * * *',
+              $$
+              SELECT net.http_post(
+                  url:='https://${{ secrets.SUPABASE_STAGING_PROJECT_ID }}.supabase.co/functions/v1/event-aggregator',
+                  headers:='{"Authorization": "Bearer ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}"}'::jsonb
+              )
+              $$
+          );
+          EOF
 
       - name: Set function secrets
         run: |
@@ -128,7 +145,7 @@ jobs:
         run: |
           # Deploy individual functions with proper environment variables
           supabase functions deploy update-geoip-database \
-            --project-ref $SUPABASE_PROJECT_ID \
+            --project-ref $SUPABASE_PROJECT_ID
 
           supabase functions deploy event-aggregator \
             --project-ref $SUPABASE_PROJECT_ID \
@@ -144,6 +161,23 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Schedule hourly event aggregation for Production
+        run: |
+          echo "Scheduling event aggregator function to run hourly on production"
+          PGPASSWORD="${{ secrets.SUPABASE_DB_PASSWORD }}" psql \
+            "postgresql://postgres@db.${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co:5432/postgres" <<EOF
+          SELECT cron.schedule(
+              'event-aggregator-job',
+              '0 * * * *',
+              $$
+              SELECT net.http_post(
+                  url:='https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/event-aggregator',
+                  headers:='{"Authorization": "Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"}'::jsonb
+              )
+              $$
+          );
+          EOF
 
       - name: Set function secrets
         run: |
