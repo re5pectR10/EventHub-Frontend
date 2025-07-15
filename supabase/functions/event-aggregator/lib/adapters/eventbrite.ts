@@ -139,7 +139,7 @@ export class EventbriteAdapter implements EventAdapter {
       time_filter: "current_future",
     });
 
-    const url = `${this.baseUrl}/events/search/?${params.toString()}`;
+    const url = `${this.baseUrl}/events/search?${params.toString()}`;
 
     const response = await fetch(url, {
       headers: {
